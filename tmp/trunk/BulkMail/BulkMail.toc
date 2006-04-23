@@ -1,0 +1,7 @@
+## Interface: 11000
+## Title: BulkMail
+## Notes: Bulk mail sending made easy
+## SavedVariables: BulkMailDB 
+## RequiredDeps: Ace, PeriodicTable
+BulkMailLocals.lua
+BulkMail.lua

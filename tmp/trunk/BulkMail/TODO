@@ -1,0 +1,17 @@
+BulkMail TODO List:
+
+- Find a mod-agnostic method to distinguish (highlight) inventory items to be sent
+
+- Determine a way to add/remove items to auto-send lists. Start with a slash command i.e. /bulkmail to <destination> item [more items...]
+	+ Allow PT groups to be specified
+
+- Mail Send tab:
+	+ If no name in the To: field, then highlight all items in auto-send list
+    + If a name is in the To: field, then highlight all items in auto-send list destined for that character
+    + Clicking inventory items shall highlight/unhighlight items to be sent
+    	* Items added with the To: field blank will go to a default destination
+    + Send button sends all highlighted items to appropriate destinations
+    + "Clear All" button for unhighlighting everything
+
+- Mail view frame:
+	+ Add "Re-send" button to work exactly like the "Return" button for bouncing items back to mules (with one-hour delay)
