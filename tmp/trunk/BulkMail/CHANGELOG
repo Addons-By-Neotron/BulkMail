@@ -1,0 +1,4 @@
+0.1.0
+- Added stuff for adding, removing, and destination-changing of single items to an autosend list
+- Added ability to send all items in the autosend list
+- While I think everything 'works', there is NO interface.  This is not practical for use yet, so no whining.
