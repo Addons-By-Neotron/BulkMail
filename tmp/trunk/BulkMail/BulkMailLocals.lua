@@ -13,12 +13,6 @@ BulkMailLocals = {
 
 BulkMailLocals.CMD_OPTIONS = {
 	{
-		option		=	"test",
-		desc		=	"test opt",
-		method		=	"Test",
-		input		=	false,
-	},
-	{
 		option		=	"autosend",
 		desc		=	"AutoSend options",
 		args		=	{
