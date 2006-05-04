@@ -4,4 +4,5 @@
 ## SavedVariables: BulkMailDB 
 ## RequiredDeps: Ace, PeriodicTable
 BulkMailLocals.lua
+BulkMailUtil.lua
 BulkMail.lua

@@ -1,3 +1,8 @@
+0.2.0
+- AutoSend list commands work
+- Uses Metrognome to throttle sending of items
+- Can now be used as a rudimentary AutoSend mod
+- Not responsible for items lost or destroyed in-transit
 0.1.0
 - Added stuff for adding, removing, and destination-changing of single items to an autosend list
 - Added ability to send all items in the autosend list
