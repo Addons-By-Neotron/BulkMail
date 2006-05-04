@@ -3,6 +3,7 @@
 ## Notes: Bulk mail sending made easy
 ## SavedVariables: BulkMailDB 
 ## RequiredDeps: Ace, PeriodicTable
+Metrognome/MetrognomeLib.lua
 BulkMailLocals.lua
 BulkMailUtil.lua
 BulkMail.lua
