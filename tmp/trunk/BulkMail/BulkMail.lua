@@ -2,10 +2,6 @@ local function select(n, ...)
 	return arg[n]
 end
 
-local function GetItemID(item)
-	return select(3, string.find(tostring(item), "item:(%d+):"))
-end
-
 local function GetItemLink(item)
 	local name, _, rarity = GetItemInfo(item)
 	if name and rarity then
