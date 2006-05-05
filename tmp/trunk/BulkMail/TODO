@@ -1,19 +1,19 @@
 BulkMail TODO List:
 
-- Find a mod-agnostic method to distinguish (highlight) inventory items to be sent
+- Find a mod-agnostic method to distinguish (highlight) inventory items to be sent (complete for default UI and any container frames with standard GetIDs)
 	+ Identify container frames (complete)
 	+ Identify the items contained by each frame (complete)
 
 - Determine a way to add/remove items to auto-send lists. Start with a slash command i.e. /bulkmail to <destination> item [more items...]
-	+ Allow item links to be parsed for items
+	+ Allow item links to be parsed for items (complete)
 	+ Allow PT groups to be specified
 
 - Mail Send tab:
-	+ If no name in the To: field, then highlight all container items in auto-send list
-	+ If a name is in the To: field, then highlight all items in auto-send list destined for that character
-	+ Clicking inventory items shall highlight/unhighlight items to be sent
-		* Items added with the To: field blank will go to a default destination
-	+ Send button sends all highlighted items to appropriate destinations
+	+ If no name in the To: field, then highlight all container items in auto-send list (complete)
+	+ If a name is in the To: field, then highlight all items in auto-send list destined for that character (complete)
+	+ Clicking inventory items shall highlight/unhighlight items to be sent (complete)
+		* Items added with the To: field blank will go to a default destination (complete)
+	+ Send button sends all highlighted items to appropriate destinations (complete)
 	+ "Clear All" button for unhighlighting everything
 
 - Mail view frame:

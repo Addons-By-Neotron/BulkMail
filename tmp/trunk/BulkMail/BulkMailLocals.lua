@@ -6,6 +6,11 @@ BulkMailLocals = {
     COMMANDS = {"/bm", "/bulkmail"},
     CMD_OPTIONS= {},
 
+	MSG_SENDING_N_ITEMS = "Sending %d item(s) to %s.",
+	MSG_DEFAULT_DESTINATION = "Default destination for autosend items is |cffffff78%s|r.",
+	MSG_NO_DEFAULT_DESTINATION = "No default destination set.",
+	TEXT_MULTIPLE_RECIPIENTS = "multiple recipients",
+
 	ERROR_ITEM_ALREADY_IN_AUTOSEND_LIST = "This item is already in your autosend list.  Please remove it first or use |cff00ffaa/bulkmail autosend change <destination> <item> [item2, ...]|r to change its autosend destination.",
 	ERROR_ITEM_NOT_IN_AUTOSEND_LIST = "This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add <destination> <item> [item2, ...]|r to add it.",
 	ERROR_TYPE_CONFIRM_ON_CLEAR = "You must type 'confirm' to clear",
@@ -13,15 +18,14 @@ BulkMailLocals = {
 
 BulkMailLocals.CMD_OPTIONS = {
 	{
+		option		=	"asdefault",
+		desc		=	"Set the default recipient of autosent items",
+		method		=	"SetDefaultDestination",
+	},
+	{
 		option		=	"autosend",
 		desc		=	"AutoSend options",
 		args		=	{
-			{
-				option		=	"go",
-				desc		=	"AutoSend all items on your list.",
-				method		=	"SendAllItems",
-				input		=	false,
-			},
 			{
 				option		=	"add",
 				desc		=	"add items to your AutoSend list (Usage: /bulkmail autosend add <destination> <item> [item2 item3 ...]",
@@ -29,7 +33,7 @@ BulkMailLocals.CMD_OPTIONS = {
 				input		=	true,
 			},
 			{
-				option		=	"del",
+				option		=	"rm",
 				desc		=	"remove items from your AutoSend list (Usage: /bulkmail autosend del <item> [item2 item3 ...]",
 				method		=	"RemoveAutoSendItem",
 				input		=	true,
@@ -41,7 +45,7 @@ BulkMailLocals.CMD_OPTIONS = {
 				input		=	true,
 			},
 			{
-				option		=	"list",
+				option		=	"list" or "ls",
 				desc		=	"print AutoSend list",
 				method		=	"ListAutoSendItems",
 				input		=	false,
