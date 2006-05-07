@@ -45,7 +45,7 @@ BulkMailLocals.CMD_OPTIONS = {
 				input		=	true,
 			},
 			{
-				option		=	"list" or "ls",
+				option		=	"ls",
 				desc		=	"print AutoSend list",
 				method		=	"ListAutoSendItems",
 				input		=	false,

@@ -215,8 +215,10 @@ function BulkMail:ListAutoSendItems()
 end
 
 function BulkMail:AddAutoSendItem(arglist)
+	print(arglist)
 	local destination = select(3, string.find(arglist, "([^%s]+)"))
-	if string.find(destination, "item: (%d+)") then
+	--if string.find(destination, "item: (%d+)") then
+	if string.find(destination, "^|[cC]") then
 		destination = self.data.defaultDestination
 	else
 		arglist = string.sub(arglist, string.find(arglist, "%s")+1)
