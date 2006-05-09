@@ -1,3 +1,11 @@
+0.4.5
+- Switched bag display to highlight items ("pushed") being sent, rather than desaturate items not being sent
+- Alt-click toggles items to be sent; all other clicks work normally
+- GUI added!
+  + Displays current items to be sent
+  + Alt-click removes items
+  + GUI is functional but incomplete; don't come cryin' to me with GUI-related errors just yet
+
 0.4.0
 - Code cleaned up, better logic
 - First BulkMail-selected item now attached to the message if no item already attached

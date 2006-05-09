@@ -59,4 +59,10 @@ BulkMailLocals.CMD_OPTIONS = {
 		}
 	}
 }
+
+BulkMailLocals.gui = {
+	title	=	"BulkMail",
+	items	=	"Items to be sent:",
+	noitems	=	"No items selected",
+}
 end

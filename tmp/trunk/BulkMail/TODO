@@ -20,7 +20,8 @@ BulkMail TODO List:
 	+ Add "Re-send" button to work exactly like the "Return" button for bouncing items back to mules (with one-hour delay)
 
 - BulkMail Send GUI
-	+ Shows current pending items to be sent
+	+ Shows current pending items to be sent (done)
+	+ Alt-click removes items from send cache (done)
 	+ Has button to clear all items from being sent
 	+ Dragging an item onto it will add it to the current set
 

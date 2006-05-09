@@ -1,4 +1,4 @@
-local function select(n, ...)
+function select(n, ...)
 	return arg[n]
 end
 
@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.4.0",
-	releaseDate     = "05-08-2006",
+	version         = "0.4.5",
+	releaseDate     = "05-09-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -61,7 +61,6 @@ function BulkMail:MAIL_SHOW()
 	OpenAllBags()
 	self:InitializeContainerFrames()
 	self:Hook("ContainerFrameItemButton_OnClick", "BMContainerFrameItemButton_OnClick")
-	self:Hook("SetItemButtonDesaturated", "BMSetItemButtonDesaturated")
 	self:Hook("SendMailFrame_CanSend", "BMSendMailFrame_CanSend")
 	self:HookScript(SendMailMailButton, "OnClick", "BMSendMailMailButton_OnClick")
 	self:HookScript(MailFrameTab2, "OnClick", "BMMailFrameTab2_OnClick")
@@ -70,14 +69,16 @@ end
 
 function BulkMail:MAIL_CLOSED()
 	self:Unhook("ContainerFrameItemButton_OnClick")
-	self:Unhook("SetItemButtonDesaturated")
 	self:Unhook("SendMailFrame_CanSend")
 	self:UnhookScript(SendMailMailButton, "OnClick")
 	self:UnhookScript(MailFrameTab2, "OnClick")
 	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
-	for _, f in pairs(self.containerFrames) do
-		SetItemButtonDesaturated(f)
+	for bag, v in pairs(self.containerFrames) do
+		for slot, f in pairs(v) do
+			f:SetButtonState("NORMAL", 0)
+		end
 	end
+	BulkMail.gui:Hide()
 	self.sendCache = nil
 	self.cacheLock = false
 end
@@ -86,28 +87,11 @@ end
   Hooks
 -----------------------------------------------------------------------------------]]
 function BulkMail:BMContainerFrameItemButton_OnClick(button, ignoreModifiers)
-	if self:SendCachePos(this) and (not GetContainerItemInfo(this:GetParent():GetID(), this:GetID()) or IsShiftKeyDown()) then
-		self:SendCacheRemove(this)
-	end
-		
-	if not self.cacheLock and button == "LeftButton" and not IsControlKeyDown() and not IsShiftKeyDown() and not CursorHasItem() then
-		if self:SendCachePos(this) then
-			self:SendCacheRemove(this)
-		else
-			self:SendCacheAdd(this)
-		end
-		SetItemButtonDesaturated(this)
+	if IsAltKeyDown() then
+		self:SendCacheToggle(this)
 	else
 		return self:CallHook("ContainerFrameItemButton_OnClick", button, ignoreModifiers)
 	end
-end
-
-function BulkMail:BMSetItemButtonDesaturated(itemButton, locked, r, g, b)
-	if self.sendCache and table.getn(self.sendCache) > 0 then
-		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
-	end
-
-	return self:CallHook("SetItemButtonDesaturated", itemButton, not self:SendCachePos(itemButton), r, g, b)
 end
 
 function BulkMail:BMSendMailFrame_CanSend()
@@ -132,6 +116,7 @@ end
 
 function BulkMail:BMMailFrameTab2_OnClick()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
+	BulkMail.gui:Show()
 	SendMailFrame_CanSend()
 	return self:CallScript(MailFrameTab2, "OnClick")
 end
@@ -151,8 +136,10 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 	local f = enum()
 	self.containerFrames = {}
 	while f do
-		if (f.hasItem or f.SplitStack) and f:GetID() and f:GetID() > 0 then
-			table.insert(self.containerFrames, f)
+		if f.SplitStack and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
+			local bag, slot = f:GetParent():GetID(), f:GetID()
+			self.containerFrames[bag] = self.containerFrames[bag] or {}
+			self.containerFrames[bag][slot] = f
 		end
 		f = enum(f)
 	end
@@ -161,43 +148,69 @@ end
 function BulkMail:SendCacheBuild(destination)
 	if not self.cacheLock then
 		self.sendCache = {}
-		for _, f in pairs(self.containerFrames) do
-			local bag = f:GetParent():GetID()
-			local slot = f:GetID()
-			local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-			if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == string.lower(self.data.autoSendListItems[itemID])) then
-				self:SendCacheAdd(f)
+		for bag, v in pairs(self.containerFrames) do
+			for slot, f in pairs(v) do
+				local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
+				if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == string.lower(self.data.autoSendListItems[itemID])) then
+					self:SendCacheAdd(bag, slot)
+				end
 			end
-			SetItemButtonDesaturated(f)
 		end
 	end
+	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 end
 
-function BulkMail:SendCachePos(frame)
+function BulkMail:SendCachePos(frame, slot)
+	local bag = slot and frame or frame:GetParent():GetID()
+	slot = slot or frame:GetID()
 	if self.sendCache then
 		for i, v in pairs(self.sendCache) do
-			if v[1] == frame:GetParent():GetID() and v[2] == frame:GetID() then
+			if v[1] == bag and v[2] == slot then
 				return i
 			end
 		end
 	end
 end
 
-function BulkMail:SendCacheAdd(frame)
+function BulkMail:SendCacheAdd(frame, slot)
+	local bag = slot and frame or frame:GetParent():GetID()
+	slot = slot or frame:GetID()
 	if not self.sendCache then
 		self.sendCache = {}
 	end
-	if GetContainerItemInfo(frame:GetParent():GetID(), frame:GetID()) then
-		table.insert(self.sendCache, {frame:GetParent():GetID(), frame:GetID()})
+	if GetContainerItemInfo(bag, slot) then
+		table.insert(self.sendCache, {bag, slot})
+		self.containerFrames[bag][slot]:SetButtonState("PUSHED", 1)
+		BulkMail.gui.Items:ClearList()
+		BulkMail.gui.Items:Update()
+		SendMailMailButton:Enable()
 	end
-	SendMailMailButton:Enable()
+	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 end
 
-function BulkMail:SendCacheRemove(frame)
-	local i = BulkMail:SendCachePos(frame)
+function BulkMail:SendCacheRemove(frame, slot)
+	local bag = slot and frame or frame:GetParent():GetID()
+	slot = slot or frame:GetID()
+	local i = BulkMail:SendCachePos(bag, slot)
 	if i then
 		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
+		self.containerFrames[bag][slot]:SetButtonState("NORMAL", 0)
+		BulkMail.gui.Items:ClearList()
+		BulkMail.gui.Items:Update()
+		if table.getn(self.sendCache) > 0 then
+			MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
+		end
+	end
+end
+
+function BulkMail:SendCacheToggle(frame, slot)
+	local bag = slot and frame or frame:GetParent():GetID()
+	slot = slot or frame:GetID()
+	if self:SendCachePos(bag, slot) then
+		self:SendCacheRemove(bag, slot)
+	else
+		self:SendCacheAdd(bag, slot)
 	end
 end
 
