@@ -1,3 +1,7 @@
+0.4.0
+- Code cleaned up, better logic
+- First BulkMail-selected item now attached to the message if no item already attached
+
 0.3.0 -- First Beta Release
 - Send-Mail interface implemented
 - Default destination for AutoSend implemented

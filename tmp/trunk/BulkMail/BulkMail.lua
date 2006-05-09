@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.3.0",
-	releaseDate     = "05-05-2006",
+	version         = "0.4.0",
+	releaseDate     = "05-08-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -31,7 +31,7 @@ BulkMail = AceAddon:new({
 
 function BulkMail:Initialize()
 	self.metro = Metrognome:GetInstance("1")
-	self.metro:Register("BulkMail ProcessMailSendQueue", self.ProcessMailSendQueue, 0.5, self)
+	self.metro:Register("BMSend", self.Send, 0.5, self)
 	
 	BulkMailDB.profiles = BulkMailDB.profiles or {}
 	BulkMailDB.profiles[self.profilePath[2]] = BulkMailDB.profiles[self.profilePath[2]] or {}
@@ -50,6 +50,7 @@ end
 function BulkMail:Enable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
+	self.containerFrames = {}
 end
 
 --[[--------------------------------------------------------------------------------
@@ -61,7 +62,7 @@ function BulkMail:MAIL_SHOW()
 	self:InitializeContainerFrames()
 	self:Hook("ContainerFrameItemButton_OnClick", "BMContainerFrameItemButton_OnClick")
 	self:Hook("SetItemButtonDesaturated", "BMSetItemButtonDesaturated")
-	self:Hook(SendMailMailButton, "Disable", "BMSendMailMailButton_Disable")
+	self:Hook("SendMailFrame_CanSend", "BMSendMailFrame_CanSend")
 	self:HookScript(SendMailMailButton, "OnClick", "BMSendMailMailButton_OnClick")
 	self:HookScript(MailFrameTab2, "OnClick", "BMMailFrameTab2_OnClick")
 	self:HookScript(SendMailNameEditBox, "OnTextChanged", "BMSendMailNameEditBox_OnTextChanged")
@@ -70,7 +71,7 @@ end
 function BulkMail:MAIL_CLOSED()
 	self:Unhook("ContainerFrameItemButton_OnClick")
 	self:Unhook("SetItemButtonDesaturated")
-	self:Unhook(SendMailMailButton, "Disable")
+	self:Unhook("SendMailFrame_CanSend")
 	self:UnhookScript(SendMailMailButton, "OnClick")
 	self:UnhookScript(MailFrameTab2, "OnClick")
 	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
@@ -78,6 +79,7 @@ function BulkMail:MAIL_CLOSED()
 		SetItemButtonDesaturated(f)
 	end
 	self.sendCache = nil
+	self.cacheLock = false
 end
 
 --[[--------------------------------------------------------------------------------
@@ -108,40 +110,35 @@ function BulkMail:BMSetItemButtonDesaturated(itemButton, locked, r, g, b)
 	return self:CallHook("SetItemButtonDesaturated", itemButton, not self:SendCachePos(itemButton), r, g, b)
 end
 
-function BulkMail:BMSendMailMailButton_Disable()
-	if not self.sendCache or table.getn(self.sendCache) < 1 then
-		self:CallHook(SendMailMailButton, "Disable")
-	else
+function BulkMail:BMSendMailFrame_CanSend()
+	self:CallHook(SendMailFrame_CanSend)
+	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
 end
 
 function BulkMail:BMSendMailMailButton_OnClick()
-	if SendMailMailButton:IsEnabled() then
-		self:CallScript(SendMailMailButton, "OnClick")
+	self.cacheLock = true
+	self.pmsqDestination = SendMailNameEditBox:GetText()
+	if SendMailNameEditBox:GetText() == '' then
+		self.pmsqDestination = nil
 	end
-	
 	if self.sendCache and next(self.sendCache) then
-
-		self.pmsqDestination = SendMailNameEditBox:GetText()
-		if SendMailNameEditBox:GetText() == '' then
-			self.pmsqDestination = nil
-		end
-
-		self.metro:Start("BulkMail ProcessMailSendQueue")
-		self.cmd:msg(string.format(self.loc.MSG_SENDING_N_ITEMS, table.getn(self.sendCache), self.pmsqDestination or self.loc.TEXT_MULTIPLE_RECIPIENTS)) --FIX!!!
+		self.metro:Start("BMSend")
+	else
+		return self:CallScript(SendMailMailButton, "OnClick")
 	end
-
-	return self:CallScript(SendMailMailButton, "OnClick")
 end
 
 function BulkMail:BMMailFrameTab2_OnClick()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
+	SendMailFrame_CanSend()
 	return self:CallScript(MailFrameTab2, "OnClick")
 end
 
 function BulkMail:BMSendMailNameEditBox_OnTextChanged()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
+	SendMailFrame_CanSend()
 	return self:CallScript(SendMailNameEditBox, "OnTextChanged")
 end
 
@@ -184,7 +181,6 @@ function BulkMail:SendCachePos(frame)
 			end
 		end
 	end
-	return false
 end
 
 function BulkMail:SendCacheAdd(frame)
@@ -202,9 +198,6 @@ function BulkMail:SendCacheRemove(frame)
 	if i then
 		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
-		if not self.sendCache or table.getn(self.sendCache) == 0 then
-			SendMailMailButton:Disable()
-		end
 	end
 end
 
@@ -215,7 +208,6 @@ function BulkMail:ListAutoSendItems()
 end
 
 function BulkMail:AddAutoSendItem(arglist)
-	print(arglist)
 	local destination = select(3, string.find(arglist, "([^%s]+)"))
 	--if string.find(destination, "item: (%d+)") then
 	if string.find(destination, "^|[cC]") then
@@ -269,28 +261,25 @@ function BulkMail:SetDefaultDestination(name)
 	end
 end
 
-function BulkMail:ProcessMailSendQueue()
-	destination = self.pmsqDestination
+function BulkMail:Send()
 	local i, cache = next(self.sendCache)
 	if cache then
-		self.cacheLock = true
-		local bag, slot = unpack(cache)
-		local itemID = select(3,  string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-		SendMailNameEditBox:SetText(destination or self.data.autoSendListItems[itemID] or self.data.defaultDestination or '')
-		PickupContainerItem(bag, slot)
-		ClickSendMailItemButton()
-		SendMail(SendMailNameEditBox:GetText(), SendMailSubjectEditBox:GetText(), SendMailBodyEditBox:GetText())
-		self.sendCache[i] = nil
-		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
-		if self.sendCache and table.getn(self.sendCache) == 0 then
-			SendMailMailButton:Disable()
+		if not GetSendMailItem() then
+			local bag, slot = unpack(cache)
+			PickupContainerItem(bag, slot)
+			ClickSendMailItemButton()
+			SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):")))
+			self.sendCache[i] = nil
+			table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		end
+		SendMailNameEditBox:SetText(self.pmsqDestination or self.data.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.data.defaultDestination or '')
+		SendMailFrame_SendMail()
 	else
-		self.metro:Stop("BulkMail ProcessMailSendQueue")
+		self.metro:Stop("BMSend")
 		self.cacheLock = false
+		self.sendCache = nil
 	end
 end
-
 --[[--------------------------------------------------------------------------------
   Register the Addon
 -----------------------------------------------------------------------------------]]
