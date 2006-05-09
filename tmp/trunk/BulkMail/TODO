@@ -18,3 +18,12 @@ BulkMail TODO List:
 
 - Mail view frame:
 	+ Add "Re-send" button to work exactly like the "Return" button for bouncing items back to mules (with one-hour delay)
+
+- BulkMail Send GUI
+	+ Shows current pending items to be sent
+	+ Has button to clear all items from being sent
+	+ Dragging an item onto it will add it to the current set
+
+- Future plans for GUI
+	+ Allow items to be queued up to be sent while away from the mailbox
+	+ Add items to AutoSend lists
