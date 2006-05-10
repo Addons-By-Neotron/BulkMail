@@ -139,7 +139,7 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 		if f.SplitStack and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
 			local bag, slot = f:GetParent():GetID(), f:GetID()
 			self.containerFrames[bag] = self.containerFrames[bag] or {}
-			self.containerFrames[bag][slot] = f
+			table.insert(self.containerFrames[bag][slot], f)
 		end
 		f = enum(f)
 	end
@@ -149,10 +149,12 @@ function BulkMail:SendCacheBuild(destination)
 	if not self.cacheLock then
 		self.sendCache = {}
 		for bag, v in pairs(self.containerFrames) do
-			for slot, f in pairs(v) do
-				local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-				if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == string.lower(self.data.autoSendListItems[itemID])) then
-					self:SendCacheAdd(bag, slot)
+			for slot, w in pairs(v) do
+				for _, f in pairs(w) do
+					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
+					if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == string.lower(self.data.autoSendListItems[itemID])) then
+						self:SendCacheAdd(bag, slot)
+					end
 				end
 			end
 		end
@@ -181,7 +183,9 @@ function BulkMail:SendCacheAdd(frame, slot)
 	end
 	if GetContainerItemInfo(bag, slot) then
 		table.insert(self.sendCache, {bag, slot})
-		self.containerFrames[bag][slot]:SetButtonState("PUSHED", 1)
+		for _, f in pairs(self.containerFrames[bag][slot) do
+			f:SetButtonState("PUSHED", 1)
+		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
 		SendMailMailButton:Enable()
@@ -197,7 +201,9 @@ function BulkMail:SendCacheRemove(frame, slot)
 	if i then
 		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
-		self.containerFrames[bag][slot]:SetButtonState("NORMAL", 0)
+		for _, f in pairs(self.containerFrames[bag][slot]) do
+			f:SetButtonState("NORMAL", 0)
+		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
 		SendMailFrame_CanSend()

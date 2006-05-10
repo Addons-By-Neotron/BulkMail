@@ -49,9 +49,9 @@ function frame:FillItemsListBox()
 	for i, v in pairs(sendCache) do
 		local link = GetContainerItemLink(v[1], v[2])
 		local qty = select(2, GetContainerItemInfo(v[1], v[2]))
-		local itemColorText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
-		local itemColorQtyText = qty > 1 and itemColorText .. " (" .. qty .. ")"
-		table.insert(self.itemsTable, itemColorQtyText or itemColorText)
+		local itemText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
+		itemText = qty > 1 and itemText .. " (" .. qty .. ")" or itemText
+		table.insert(self.itemsTable, itemText)
 		table.insert(self.idTable, v)
 	end
 
