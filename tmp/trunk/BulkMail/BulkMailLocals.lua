@@ -62,7 +62,7 @@ BulkMailLocals.CMD_OPTIONS = {
 
 BulkMailLocals.gui = {
 	title	=	"BulkMail",
-	items	=	"Items to be sent:",
+	items	=	"Items to be sent (Alt-Click to add/remove):",
 	noitems	=	"No items selected",
 }
 end

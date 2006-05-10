@@ -95,7 +95,7 @@ function BulkMail:BMContainerFrameItemButton_OnClick(button, ignoreModifiers)
 end
 
 function BulkMail:BMSendMailFrame_CanSend()
-	self:CallHook(SendMailFrame_CanSend)
+	self:CallHook("SendMailFrame_CanSend")
 	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
@@ -157,6 +157,7 @@ function BulkMail:SendCacheBuild(destination)
 			end
 		end
 	end
+	SendMailFrame_CanSend()
 	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 end
 
@@ -185,6 +186,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 		BulkMail.gui.Items:Update()
 		SendMailMailButton:Enable()
 	end
+	SendMailFrame_CanSend()
 	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 end
 
@@ -198,6 +200,7 @@ function BulkMail:SendCacheRemove(frame, slot)
 		self.containerFrames[bag][slot]:SetButtonState("NORMAL", 0)
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
+		SendMailFrame_CanSend()
 		if table.getn(self.sendCache) > 0 then
 			MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 		end
