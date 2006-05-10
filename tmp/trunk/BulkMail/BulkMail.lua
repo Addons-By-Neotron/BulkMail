@@ -139,6 +139,7 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 		if f.SplitStack and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
 			local bag, slot = f:GetParent():GetID(), f:GetID()
 			self.containerFrames[bag] = self.containerFrames[bag] or {}
+			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
 			table.insert(self.containerFrames[bag][slot], f)
 		end
 		f = enum(f)
