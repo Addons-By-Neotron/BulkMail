@@ -183,7 +183,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 	end
 	if GetContainerItemInfo(bag, slot) then
 		table.insert(self.sendCache, {bag, slot})
-		for _, f in pairs(self.containerFrames[bag][slot) do
+		for _, f in pairs(self.containerFrames[bag][slot]) do
 			f:SetButtonState("PUSHED", 1)
 		end
 		BulkMail.gui.Items:ClearList()
