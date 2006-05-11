@@ -57,12 +57,18 @@ BulkMailLocals.CMD_OPTIONS = {
 				input		=	true,
 			},
 		}
-	}
+	},
+	{
+		option		=	"gui",
+		desc		=	"Show BulkMail GUI",
+		method		=	"ShowGUI",
+	},
 }
 
 BulkMailLocals.gui = {
 	title	=	"BulkMail",
 	items	=	"Items to be sent (Alt-Click to add/remove):",
 	noitems	=	"No items selected",
+	clear	=	"Clear",
 }
 end

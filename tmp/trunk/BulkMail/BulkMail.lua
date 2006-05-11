@@ -308,6 +308,10 @@ function BulkMail:Send()
 		self.sendCache = nil
 	end
 end
+
+function BulkMail:ShowGUI()
+	BulkMail.gui:Show()
+end
 --[[--------------------------------------------------------------------------------
   Register the Addon
 -----------------------------------------------------------------------------------]]

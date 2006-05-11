@@ -26,14 +26,15 @@
 					<Button name="$parentRow17" inherits="AceGUIListBoxRowTemplate"/>
 					<Button name="$parentRow18" inherits="AceGUIListBoxRowTemplate"/>
 				</Frames>
-            </Frame>
-            <Frame name="$parentAddItemBox" inherits="AceGUIOptionsBoxTemplate">
+			</Frame>
+			<Button name="$parentClear" inherits="AceGUIPanelButtonTemplate"/>
+			<!--<Frame name="$parentAddItemBox" inherits="AceGUIOptionsBoxTemplate">
 				<Frames>
                     <EditBox name="$parentAddItemItemText" inherits="AceGUIInputBoxTemplate"/>
                     <EditBox name="$parentAddItemDestinationText" inherits="AceGUIInputBoxTemplate"/>
 					<Button name="$parentAddItemButton" inherits="AceGUIPanelButtonTemplate"/>
 				</Frames>
-			</Frame>
+			</Frame>-->
         </Frames>
     </Frame>
 </Ui>

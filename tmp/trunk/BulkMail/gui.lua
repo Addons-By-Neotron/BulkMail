@@ -21,8 +21,18 @@ local config = {
 			fill		= "FillItemsListBox",
 			OnItemEnter = "OnItemEnter",
 			OnItemLeave = "OnItemLeave",
-			OnSelect	= "OnSelect",
-			OnClick     = "OnClick",
+			OnSelect	= "OnItemSelect",
+			OnClick     = "OnItemsClick",
+		},
+		Clear	= {
+			type	= ACEGUI_BUTTON,
+			title	= BulkMailLocals.gui.clear,
+			width	= 98,
+			height	= 26,
+			anchors = {
+				bottomleft = {xOffset = 16, yOffset = 18}
+			},
+			OnClick	= "OnClearClick",
 		},
 	},
 }
@@ -71,7 +81,7 @@ function frame:Cleanup()
 	self.Items:ClearList()
 end
 
-function frame:OnSelect()
+function frame:OnItemSelect()
 	if (not self.idTable) then return; end
 	local bag, slot = unpack(self.idTable[this.rowID])
 	local id = self.idTable[this.rowID]
@@ -88,12 +98,19 @@ function frame:OnSelect()
 	end
 end
 
-function frame:OnClick()
-	print("foo")
+function frame:OnItemsClick()
 	if CursorHasItem() then
 		print(this:GetParent():GetID())
 		print(this:GetID())
 		BulkMail:SendCacheAdd(this)
 		self.Items:Update()
 	end
+end
+
+function frame:OnClearClick()
+	for i, v in pairs(BulkMail.sendCache) do
+		BulkMail:SendCacheRemove(unpack(v))
+	end
+	self.idTable = nil
+	self.Items:ClearList()
 end
