@@ -84,7 +84,7 @@ function frame:OnSelect()
 	elseif (IsControlKeyDown()) then
 		DressUpItemLink(GetContainerItemLink(bag, slot))
 	else
-		SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:0:0:0)")), GetContainerItemLink(bag, slot), arg1)
+		SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:)")), GetContainerItemLink(bag, slot), arg1)
 	end
 end
 
