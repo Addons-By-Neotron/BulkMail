@@ -165,7 +165,9 @@ function BulkMail:SendCacheBuild(destination)
 	BulkMail.gui.Items:ClearList()
 	BulkMail.gui.Items:Update()
 	SendMailFrame_CanSend()
-	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
+	if table.getn(self.sendCache) > 1 then
+		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
+	end
 end
 
 function BulkMail:SendCachePos(frame, slot)
