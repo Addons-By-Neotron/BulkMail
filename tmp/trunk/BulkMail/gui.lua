@@ -45,7 +45,7 @@ function frame:FillItemsListBox()
 	self.itemsTable = {}
 	self.idTable = {}
 	local sendCache = BulkMail.sendCache
-	if (not sendCache or getn(sendCache) == 0) then self.itemsTable = {BulkMailLocals.gui.noitems}; self.idTable = nil; return; end
+	if (not sendCache or getn(sendCache) == 0) then self.itemsTable = {BulkMailLocals.gui.noitems}; self.idTable = nil; return self.itemsTable; end
 	for i, v in pairs(sendCache) do
 		local link = GetContainerItemLink(v[1], v[2])
 		local qty = select(2, GetContainerItemInfo(v[1], v[2]))

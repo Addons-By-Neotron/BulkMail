@@ -75,7 +75,9 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
 	for bag, v in pairs(self.containerFrames) do
 		for slot, f in pairs(v) do
-			f:SetButtonState("NORMAL", 0)
+			if f.SetButtonState then
+				f:SetButtonState("NORMAL", 0)
+			end
 		end
 	end
 	BulkMail.gui:Hide()
@@ -160,6 +162,8 @@ function BulkMail:SendCacheBuild(destination)
 			end
 		end
 	end
+	BulkMail.gui.Items:ClearList()
+	BulkMail.gui.Items:Update()
 	SendMailFrame_CanSend()
 	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 end
