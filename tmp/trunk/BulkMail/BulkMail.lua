@@ -65,6 +65,7 @@ function BulkMail:MAIL_SHOW()
 	self:HookScript(SendMailMailButton, "OnClick", "BMSendMailMailButton_OnClick")
 	self:HookScript(MailFrameTab2, "OnClick", "BMMailFrameTab2_OnClick")
 	self:HookScript(SendMailNameEditBox, "OnTextChanged", "BMSendMailNameEditBox_OnTextChanged")
+	SendMailMailButton:Enable()
 end
 
 function BulkMail:MAIL_CLOSED()
