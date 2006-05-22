@@ -58,7 +58,9 @@ end
 -----------------------------------------------------------------------------------]]
 
 function BulkMail:MAIL_SHOW()
-	OpenAllBags()
+	if not Bagnon then
+		OpenAllBags()
+	end
 	self:InitializeContainerFrames()
 	self:Hook("ContainerFrameItemButton_OnClick", "BMContainerFrameItemButton_OnClick")
 	self:Hook("SendMailFrame_CanSend", "BMSendMailFrame_CanSend")
@@ -135,8 +137,8 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 	local f = enum()
 	self.containerFrames = {}
 	while f do
-		if f.SplitStack and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
-			local bag, slot = f:GetParent():GetID(), f:GetID()
+		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
+		if bag >= 0 and bag < NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
 			self.containerFrames[bag] = self.containerFrames[bag] or {}
 			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
 			table.insert(self.containerFrames[bag][slot], f)
@@ -184,7 +186,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 	if not self.sendCache then
 		self.sendCache = {}
 	end
-	if GetContainerItemInfo(bag, slot) then
+	if GetContainerItemInfo(bag, slot) and not self:SendCachePos(bag, slot) then
 		table.insert(self.sendCache, {bag, slot})
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("PUSHED", 1) end

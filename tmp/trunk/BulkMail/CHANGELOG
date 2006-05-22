@@ -1,3 +1,10 @@
+0.4.7
+- Bagnon compatibility achieved
+
+0.4.6
+- Send button should be correctly highlighted initially when opening mailbox
+- TODO updated
+
 0.4.5
 - Switched bag display to highlight items ("pushed") being sent, rather than desaturate items not being sent
 - Alt-click toggles items to be sent; all other clicks work normally
