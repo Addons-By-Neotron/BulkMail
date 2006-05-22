@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.4.5",
-	releaseDate     = "05-09-2006",
+	version         = "0.4.6",
+	releaseDate     = "05-22-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -74,16 +74,13 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookScript(SendMailMailButton, "OnClick")
 	self:UnhookScript(MailFrameTab2, "OnClick")
 	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
-	for bag, v in pairs(self.containerFrames) do
-		for slot, f in pairs(v) do
-			if f.SetButtonState then
-				f:SetButtonState("NORMAL", 0)
-			end
+	self:SendCacheCleanUp()
+	--[[for bag, slot in pairs(self.containerFrames) do
+		for _, f in pairs(slot) do
+			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
-	end
+	end]]--
 	BulkMail.gui:Hide()
-	self.sendCache = nil
-	self.cacheLock = false
 end
 
 --[[--------------------------------------------------------------------------------
@@ -120,13 +117,12 @@ end
 function BulkMail:BMMailFrameTab2_OnClick()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
 	BulkMail.gui:Show()
-	SendMailFrame_CanSend()
+	SendMailMailButton:Enable()
 	return self:CallScript(MailFrameTab2, "OnClick")
 end
 
 function BulkMail:BMSendMailNameEditBox_OnTextChanged()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
-	SendMailFrame_CanSend()
 	return self:CallScript(SendMailNameEditBox, "OnTextChanged")
 end
 
@@ -156,7 +152,7 @@ function BulkMail:SendCacheBuild(destination)
 			for slot, w in pairs(v) do
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-					if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == string.lower(self.data.autoSendListItems[itemID])) then
+					if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == self.data.autoSendListItems[itemID]) then
 						self:SendCacheAdd(bag, slot)
 					end
 				end
@@ -165,8 +161,7 @@ function BulkMail:SendCacheBuild(destination)
 	end
 	BulkMail.gui.Items:ClearList()
 	BulkMail.gui.Items:Update()
-	SendMailFrame_CanSend()
-	if table.getn(self.sendCache) > 1 then
+	if self.sendCache and table.getn(self.sendCache) > 1 then
 		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 	end
 end
@@ -192,14 +187,15 @@ function BulkMail:SendCacheAdd(frame, slot)
 	if GetContainerItemInfo(bag, slot) then
 		table.insert(self.sendCache, {bag, slot})
 		for _, f in pairs(self.containerFrames[bag][slot]) do
-			f:SetButtonState("PUSHED", 1)
+			if f.SetButtonState then f:SetButtonState("PUSHED", 1) end
 		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
 		SendMailMailButton:Enable()
 	end
-	SendMailFrame_CanSend()
-	MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
+	if self.sendCache and table.getn(self.sendCache) > 1 then
+		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
+	end
 end
 
 function BulkMail:SendCacheRemove(frame, slot)
@@ -210,14 +206,24 @@ function BulkMail:SendCacheRemove(frame, slot)
 		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
-			f:SetButtonState("NORMAL", 0)
+			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
-		SendMailFrame_CanSend()
-		if table.getn(self.sendCache) > 0 then
+		if self.sendCache and table.getn(self.sendCache) > 0 then
 			MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 		end
+	end
+end
+
+function BulkMail:SendCacheCleanUp()
+	if self.sendCache then
+		for _, cache in pairs(self.sendCache) do
+			local bag, slot = unpack(cache)
+			self:SendCacheRemove(bag, slot)
+		end
+		self.sendCache = nil
+		self.cacheLock = false
 	end
 end
 
@@ -239,7 +245,7 @@ end
 
 function BulkMail:AddAutoSendItem(arglist)
 	local destination = select(3, string.find(arglist, "([^%s]+)"))
-	if string.find(destination, "^|[cC]") then
+	if string.find(destination, "^|[cC]") then	--first arg is an item, not a name
 		destination = self.data.defaultDestination
 	else
 		arglist = string.sub(arglist, string.find(arglist, "%s")+1)
@@ -264,7 +270,7 @@ function BulkMail:RemoveAutoSendItem(arglist)
 end
 
 function BulkMail:RemoveAutoSendDestination(destination)
-	for itemID, dest in self.data.autoSendListItems do
+	for itemID, dest in pairs(self.data.autoSendListItems) do
 		if destination == dest then
 			self.data.autoSendListItems[itemID] = nil
 		end
@@ -281,7 +287,7 @@ end
 
 function BulkMail:SetDefaultDestination(name)
 	if name ~= '' then
-		self.data.defaultDestination = name
+		self.data.defaultDestination = string.lower(name)
 	end
 	if self.data.defaultDestination and self.data.defaultDestination ~= '' then
 		self.cmd:msg(string.format(self.loc.MSG_DEFAULT_DESTINATION, self.data.defaultDestination))
@@ -291,22 +297,19 @@ function BulkMail:SetDefaultDestination(name)
 end
 
 function BulkMail:Send()
-	local i, cache = next(self.sendCache)
-	if cache then
-		if not GetSendMailItem() then
-			local bag, slot = unpack(cache)
-			PickupContainerItem(bag, slot)
-			ClickSendMailItemButton()
-			SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):")))
-			self.sendCache[i] = nil
-			table.setn(self.sendCache, table.getn(self.sendCache) - 1)
-		end
+	local _, cache = next(self.sendCache)
+	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(self.pmsqDestination or self.data.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.data.defaultDestination or '')
 		SendMailFrame_SendMail()
+	elseif cache then
+		local bag, slot = unpack(cache)
+		PickupContainerItem(bag, slot)
+		ClickSendMailItemButton()
+		SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):")) or 0)
+		self:SendCacheRemove(bag, slot)
 	else
 		self.metro:Stop("BMSend")
-		self.cacheLock = false
-		self.sendCache = nil
+		self:SendCacheCleanUp()
 	end
 end
 

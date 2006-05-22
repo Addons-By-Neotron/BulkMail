@@ -41,10 +41,10 @@ frame:Initialize(BulkMail_GUI, config)
 BulkMail.gui = frame
 
 function frame:OnItemEnter()
-	if (not self.idTable) then return; end
-	local bag, slot = unpack(self.idTable[this.rowID])
+	if (not self.bsTable) then return; end
+	local bag, slot = unpack(self.bsTable[this.rowID])
 	GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-	GameTooltip:SetHyperlink(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+)")))
+	GameTooltip:SetHyperlink(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)")))
 end
 
 function frame:OnItemLeave()
@@ -54,15 +54,17 @@ end
 function frame:FillItemsListBox()
 	self.itemsTable = {}
 	self.idTable = {}
+	self.bsTable = {}
 	local sendCache = BulkMail.sendCache
-	if (not sendCache or getn(sendCache) == 0) then self.itemsTable = {BulkMailLocals.gui.noitems}; self.idTable = nil; return self.itemsTable; end
+	if (not sendCache or getn(sendCache) == 0) then self.itemsTable = {BulkMailLocals.gui.noitems}; self.idTable = nil self.bsTable = nil; return self.itemsTable; end
 	for i, v in pairs(sendCache) do
 		local link = GetContainerItemLink(v[1], v[2])
 		local qty = select(2, GetContainerItemInfo(v[1], v[2]))
 		local itemText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
 		itemText = qty > 1 and itemText .. " (" .. qty .. ")" or itemText
 		table.insert(self.itemsTable, itemText)
-		table.insert(self.idTable, v)
+		table.insert(self.idTable, link)
+		table.insert(self.bsTable, v)
 	end
 
 	return self.itemsTable or {BulkMailLocals.gui.noitems}
@@ -78,13 +80,13 @@ end
 function frame:Cleanup()
 	self.itemsTable = nil
 	self.idTable = nil
+	self.bsTable = nil
 	self.Items:ClearList()
 end
 
 function frame:OnItemSelect()
-	if (not self.idTable) then return; end
-	local bag, slot = unpack(self.idTable[this.rowID])
-	local id = self.idTable[this.rowID]
+	if (not self.bsTable) then return; end
+	local bag, slot = unpack(self.bsTable[this.rowID])
 
 	if (arg1 ~= "LeftButton") then
 	elseif( IsAltKeyDown() ) then
@@ -94,7 +96,7 @@ function frame:OnItemSelect()
 	elseif (IsControlKeyDown()) then
 		DressUpItemLink(GetContainerItemLink(bag, slot))
 	else
-		SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:)")), GetContainerItemLink(bag, slot), arg1)
+		SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)")), GetContainerItemLink(bag, slot), arg1)
 	end
 end
 
@@ -112,5 +114,6 @@ function frame:OnClearClick()
 		BulkMail:SendCacheRemove(unpack(v))
 	end
 	self.idTable = nil
+	self.bsTable = nil
 	self.Items:ClearList()
 end
