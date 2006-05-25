@@ -190,7 +190,10 @@ function BulkMail:SendCacheAdd(frame, slot)
 	if not self.sendCache then
 		self.sendCache = {}
 	end
-	if GetContainerItemInfo(bag, slot) and not self:SendCachePos(bag, slot) then
+	if not self.containerFrames then
+		InitializeContainerFrames()
+	end
+	if GetContainerItemInfo(bag, slot) and self.containerFrames[bag] and self.containerFrames[bag][slot] and not self:SendCachePos(bag, slot) then
 		table.insert(self.sendCache, {bag, slot})
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("PUSHED", 1) end
