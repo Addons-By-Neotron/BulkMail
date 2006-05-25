@@ -9,6 +9,8 @@ BulkMailLocals = {
 	MSG_SENDING_N_ITEMS = "Sending %d item(s) to %s.",
 	MSG_DEFAULT_DESTINATION = "Default destination for autosend items is |cffffff78%s|r.",
 	MSG_NO_DEFAULT_DESTINATION = "No default destination set.",
+	MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION = "Enter a name in the To: field or set a default destination with /bm asdefaut.",
+	
 	TEXT_MULTIPLE_RECIPIENTS = "multiple recipients",
 
 	ERROR_ITEM_ALREADY_IN_AUTOSEND_LIST = "This item is already in your autosend list.  Please remove it first or use |cff00ffaa/bulkmail autosend change <destination> <item> [item2, ...]|r to change its autosend destination.",
@@ -58,11 +60,11 @@ BulkMailLocals.CMD_OPTIONS = {
 			},
 		}
 	},
-	{
-		option		=	"gui",
-		desc		=	"Show BulkMail GUI",
-		method		=	"ShowGUI",
-	},
+--	{
+--		option		=	"gui",
+--		desc		=	"Show BulkMail GUI",
+--		method		=	"ShowGUI",
+--	},
 }
 
 BulkMailLocals.gui = {

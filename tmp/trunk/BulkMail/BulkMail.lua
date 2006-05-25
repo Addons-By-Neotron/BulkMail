@@ -115,7 +115,7 @@ function BulkMail:BMSendMailMailButton_OnClick()
 	if SendMailNameEditBox:GetText() == '' then
 		self.pmsqDestination = nil
 	end
-	if self.sendCache and next(self.sendCache) then
+	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
 		self.metro:Start("BMSend")
 	else
 		return self:CallScript(SendMailMailButton, "OnClick")
@@ -311,7 +311,14 @@ function BulkMail:Send()
 	local _, cache = next(self.sendCache)
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(self.pmsqDestination or self.data.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.data.defaultDestination or '')
-		SendMailFrame_SendMail()
+		if SendMailNameEditBox:GetText() ~= '' then
+			SendMailFrame_SendMail()
+		elseif not self.data.DefaultDestination then
+			self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
+			self.cmd:msg(self.loc.MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION)
+			self.cacheLock = nil
+			self.metro:Stop("BMSend")
+		end
 	elseif cache then
 		local bag, slot = unpack(cache)
 		PickupContainerItem(bag, slot)
