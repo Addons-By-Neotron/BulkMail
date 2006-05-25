@@ -60,6 +60,7 @@ end
 function BulkMail:MAIL_SHOW()
 	if not Bagnon then
 		OpenAllBags()
+		OpenAllBags()
 	end
 	self:InitializeContainerFrames()
 	self:Hook("ContainerFrameItemButton_OnClick", "BMContainerFrameItemButton_OnClick")
