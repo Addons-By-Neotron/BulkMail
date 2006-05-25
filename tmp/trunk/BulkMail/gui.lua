@@ -169,10 +169,8 @@ function frame:OnDropClick()
 		if bag and slot then
 			BulkMail:SendCacheAdd(bag, slot)
 		end
+		--To clear the cursor.
+		PickupContainerItem(bag, slot)
 	end
 	self.Items:Update()
-	--To clear the cursor.  Seriously.
-	repeat
-		if CursorHasItem() or CursorHasSpell() then PickupSpell(1, BOOKTYPE_SPELL) end
-	until not CursorHasItem() and not CursorHasSpell()
 end
