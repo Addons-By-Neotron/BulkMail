@@ -2,11 +2,11 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.blizzard.com/wow/ui/FrameXML/UI.xsd">
 
-    <Frame name="BulkMail_GUIFrame" inherits="AceGUIDialogTemplate" hidden="true" parent="UIParent" toplevel="TRUE" frameStrata="MEDIUM">
-        <Frames>
-            <!-- Command options and arguments selection -->
+	<Frame name="BulkMail_GUIFrame" inherits="AceGUIDialogTemplate" hidden="true" parent="UIParent" toplevel="TRUE" frameStrata="MEDIUM">
+		<Frames>
+			<!-- Command options and arguments selection -->
 			<Frame name="$parentItems" inherits="AceGUIListBoxTemplate">
-              	<Frames>
+				<Frames>
 					<Button name="$parentRow1" inherits="AceGUIListBoxRowTemplate"/>
 					<Button name="$parentRow2" inherits="AceGUIListBoxRowTemplate"/>
 					<Button name="$parentRow3" inherits="AceGUIListBoxRowTemplate"/>
@@ -27,14 +27,19 @@
 					<Button name="$parentRow18" inherits="AceGUIListBoxRowTemplate"/>
 				</Frames>
 			</Frame>
-			<Button name="$parentClear" inherits="AceGUIPanelButtonTemplate"/>
-			<!--<Frame name="$parentAddItemBox" inherits="AceGUIOptionsBoxTemplate">
+			<Frame name="$parentDropBox" inherits="AceGUIOptionsBoxTemplate">
 				<Frames>
-                    <EditBox name="$parentAddItemItemText" inherits="AceGUIInputBoxTemplate"/>
-                    <EditBox name="$parentAddItemDestinationText" inherits="AceGUIInputBoxTemplate"/>
-					<Button name="$parentAddItemButton" inherits="AceGUIPanelButtonTemplate"/>
+					<Button name="$parentDropButton" inherits="AceGUIButtonTemplate">
+						<Scripts>
+							<OnReceiveDrag>
+								this:CallHandler("OnReceiveDrag")
+							</OnReceiveDrag>
+						</Scripts>
+					</Button>
 				</Frames>
-			</Frame>-->
-        </Frames>
-    </Frame>
+			</Frame>			
+			<Button name="$parentClear" inherits="AceGUIPanelButtonTemplate"/>
+			<Button name="$parentSend" inherits="AceGUIPanelButtonTemplate"/>
+		</Frames>
+	</Frame>
 </Ui>

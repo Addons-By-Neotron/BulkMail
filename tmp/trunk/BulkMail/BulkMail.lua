@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.4.6",
-	releaseDate     = "05-22-2006",
+	version         = "0.4.8",
+	releaseDate     = "05-24-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -101,6 +101,11 @@ function BulkMail:BMSendMailFrame_CanSend()
 	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
+	if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
+		self.gui.Send:Enable()
+	else
+		self.gui.Send:Disable()
+	end
 end
 
 function BulkMail:BMSendMailMailButton_OnClick()
@@ -119,7 +124,6 @@ end
 function BulkMail:BMMailFrameTab2_OnClick()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
 	BulkMail.gui:Show()
-	SendMailMailButton:Enable()
 	return self:CallScript(MailFrameTab2, "OnClick")
 end
 
@@ -193,7 +197,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
-		SendMailMailButton:Enable()
+		SendMailFrame_CanSend()
 	end
 	if self.sendCache and table.getn(self.sendCache) > 1 then
 		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
@@ -215,6 +219,7 @@ function BulkMail:SendCacheRemove(frame, slot)
 		if self.sendCache and table.getn(self.sendCache) > 0 then
 			MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
 		end
+		SendMailFrame_CanSend()
 	end
 end
 
