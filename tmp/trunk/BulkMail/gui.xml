@@ -23,8 +23,6 @@
 					<Button name="$parentRow14" inherits="AceGUIListBoxRowTemplate"/>
 					<Button name="$parentRow15" inherits="AceGUIListBoxRowTemplate"/>
 					<Button name="$parentRow16" inherits="AceGUIListBoxRowTemplate"/>
-					<Button name="$parentRow17" inherits="AceGUIListBoxRowTemplate"/>
-					<Button name="$parentRow18" inherits="AceGUIListBoxRowTemplate"/>
 				</Frames>
 			</Frame>
 			<Frame name="$parentDropBox" inherits="AceGUIOptionsBoxTemplate">

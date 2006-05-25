@@ -23,7 +23,7 @@ BulkMail TODO List:
 	+ Shows current pending items to be sent (complete)
 	+ Alt-click removes items from send cache (complete)
 	+ Has button to clear all items from being sent (complete)
-	+ Dragging an item onto it will add it to the current set
+	+ Dragging an item onto it will add it to the current set (complete!)
 
 - Future plans for GUI
 	+ Allow items to be queued up to be sent while away from the mailbox

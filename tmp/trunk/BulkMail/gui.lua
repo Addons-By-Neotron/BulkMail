@@ -109,7 +109,7 @@ function frame:FillItemsListBox()
 end
 
 function frame:Build()
-	for i = 1, 18 do
+	for i = 1, 16 do
 		self.Items["Row"..i]:RegisterForClicks("LeftButtonDown", "RightButtonDown")
 	end
 end
@@ -168,9 +168,9 @@ function frame:OnDropClick()
 		local bag, slot = GetLockedContainerItem()
 		if bag and slot then
 			BulkMail:SendCacheAdd(bag, slot)
+			--To clear the cursor.
+			PickupContainerItem(bag, slot)
 		end
-		--To clear the cursor.
-		PickupContainerItem(bag, slot)
 	end
 	self.Items:Update()
 end
