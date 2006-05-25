@@ -48,7 +48,7 @@ local config = {
 			width   = 276,
 			height  = 56,
 			anchors = {
-				top = {relTo="$parentItems", relPoint = "bottom", xOffset = 0, yOffset = -4}
+				top = {relTo="$parentItems", relPoint = "bottom", xOffset = 0, yOffset = -2}
 			},
 			elements = {
 				DropButton = {
