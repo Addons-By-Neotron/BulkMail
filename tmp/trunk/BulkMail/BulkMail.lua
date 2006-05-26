@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.5.0",
-	releaseDate     = "05-26-2006",
+	version         = "0.4.8",
+	releaseDate     = "05-24-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -93,6 +93,7 @@ function BulkMail:BMContainerFrameItemButton_OnClick(button, ignoreModifiers)
 	if IsAltKeyDown() then
 		self:SendCacheToggle(this)
 	else
+		self:SendCacheRemove(this)
 		return self:CallHook("ContainerFrameItemButton_OnClick", button, ignoreModifiers)
 	end
 end
