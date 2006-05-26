@@ -78,11 +78,11 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookScript(MailFrameTab2, "OnClick")
 	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
 	self:SendCacheCleanUp()
-	--[[for bag, slot in pairs(self.containerFrames) do
+	for bag, slot in pairs(self.containerFrames) do
 		for _, f in pairs(slot) do
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
-	end]]--
+	end
 	BulkMail.gui:Hide()
 end
 
