@@ -2,7 +2,7 @@
 ## Title: BulkMail |cff007fff-Ace-|r
 ## Notes: Bulk mail sending made easy
 ## Version: 0.5.0
-## SVN: 2136
+## SVN: 2140
 ## SavedVariables: BulkMailDB 
 ## RequiredDeps: Ace, AceGUI
 ## OptionalDeps: PeriodicTable
