@@ -139,10 +139,7 @@ function frame:OnItemSelect()
 end
 
 function frame:OnClearClick()
-	if not BulkMail.sendCache then return end
-	for i, v in pairs(BulkMail.sendCache) do
-		BulkMail:SendCacheRemove(unpack(v))
-	end
+	BulkMail:SendCacheCleanUp()
 	self.idTable = nil
 	self.bsTable = nil
 	self.Items:ClearList()
@@ -164,13 +161,13 @@ function frame:OnSendClick()
 end
 
 function frame:OnDropClick()
-	if CursorHasItem() then
-		local bag, slot = GetLockedContainerItem()
-		if bag and slot then
-			BulkMail:SendCacheAdd(bag, slot)
-			--To clear the cursor.
-			PickupContainerItem(bag, slot)
-		end
+	if GetSendMailItem() then
+		BulkMail.cmd:msg(BulkMail.loc.MSG_MULTIPLE_LOCKED_ITEM_WARNING)
+	end
+	if CursorHasItem() and GetLockedContainerItem() then
+		BulkMail:SendCacheAdd(GetLockedContainerItem())
+		--To clear the cursor.
+		PickupContainerItem(GetLockedContainerItem())
 	end
 	self.Items:Update()
 end

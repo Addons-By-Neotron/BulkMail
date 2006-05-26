@@ -10,6 +10,7 @@ BulkMailLocals = {
 	MSG_DEFAULT_DESTINATION = "Default destination for autosend items is |cffffff78%s|r.",
 	MSG_NO_DEFAULT_DESTINATION = "No default destination set.",
 	MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION = "Enter a name in the To: field or set a default destination with /bm defaultdest.",
+	MSG_MULTIPLE_LOCKED_ITEM_WARNING = "WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame.",
 	
 	TEXT_MULTIPLE_RECIPIENTS = "multiple recipients",
 

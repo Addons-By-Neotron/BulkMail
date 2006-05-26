@@ -1,3 +1,6 @@
+--[[--------------------------------------------------------------------------------
+  Global/Local functions
+-----------------------------------------------------------------------------------]]
 function select(n, ...)
 	return arg[n]
 end
@@ -169,9 +172,6 @@ function BulkMail:SendCacheBuild(destination)
 	end
 	BulkMail.gui.Items:ClearList()
 	BulkMail.gui.Items:Update()
-	if self.sendCache and table.getn(self.sendCache) > 1 then
-		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
-	end
 end
 
 function BulkMail:SendCachePos(frame, slot)
@@ -204,9 +204,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 		BulkMail.gui.Items:Update()
 		SendMailFrame_CanSend()
 	end
-	if self.sendCache and table.getn(self.sendCache) > 1 then
-		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
-	end
+	self:UpdateSendCost()
 end
 
 function BulkMail:SendCacheRemove(frame, slot)
@@ -221,9 +219,7 @@ function BulkMail:SendCacheRemove(frame, slot)
 		end
 		BulkMail.gui.Items:ClearList()
 		BulkMail.gui.Items:Update()
-		if self.sendCache and table.getn(self.sendCache) > 0 then
-			MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * table.getn(self.sendCache))
-		end
+		self:UpdateSendCost()
 		SendMailFrame_CanSend()
 	end
 end
@@ -231,8 +227,7 @@ end
 function BulkMail:SendCacheCleanUp()
 	if self.sendCache then
 		for _, cache in pairs(self.sendCache) do
-			local bag, slot = unpack(cache)
-			self:SendCacheRemove(bag, slot)
+			self:SendCacheRemove(unpack(cache))
 		end
 		self.sendCache = nil
 		self.cacheLock = false
@@ -307,6 +302,20 @@ function BulkMail:SetDefaultDestination(name)
 		self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
 	end
 end
+
+
+function BulkMail:UpdateSendCost()
+	if self.sendCache and table.getn(self.sendCache) > 0 then
+		local numMails = table.getn(self.sendCache)
+		if GetSendMailItem() then
+			numMails = numMails + 1
+		end
+		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * numMails)
+	else
+		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
+	end
+end
+	
 
 function BulkMail:Send()
 	local _, cache = next(self.sendCache)
