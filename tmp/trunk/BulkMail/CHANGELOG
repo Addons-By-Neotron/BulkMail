@@ -1,3 +1,6 @@
+0.5.0: Initial beta release
+- Various bugfixes and debug code removed in preparation for beta release
+
 0.4.8
 - Drag-and-drop area for adding items to the Send list implemented
 

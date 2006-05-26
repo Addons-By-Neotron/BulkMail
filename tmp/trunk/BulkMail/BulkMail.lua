@@ -15,8 +15,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.4.8",
-	releaseDate     = "05-24-2006",
+	version         = "0.5.0",
+	releaseDate     = "05-26-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
