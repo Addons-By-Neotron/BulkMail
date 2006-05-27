@@ -18,8 +18,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.4.8",
-	releaseDate     = "05-24-2006",
+	version         = "0.5.1",
+	releaseDate     = "05-27-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -66,6 +66,7 @@ function BulkMail:MAIL_SHOW()
 		OpenAllBags()
 	end
 	self:InitializeContainerFrames()
+	self:DestCacheBuild()
 	self:Hook("ContainerFrameItemButton_OnClick", "BMContainerFrameItemButton_OnClick")
 	self:Hook("SendMailFrame_CanSend", "BMSendMailFrame_CanSend")
 	self:HookScript(SendMailMailButton, "OnClick", "BMSendMailMailButton_OnClick")
@@ -147,7 +148,7 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 	self.containerFrames = {}
 	while f do
 		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
-		if bag >= 0 and bag < NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
+		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
 			self.containerFrames[bag] = self.containerFrames[bag] or {}
 			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
 			table.insert(self.containerFrames[bag][slot], f)
@@ -156,9 +157,21 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 	end
 end
 
+function BulkMail:DestCacheBuild()
+	self.destCache = {}
+	for _, name in pairs(self.data.autoSendListItems) do
+		if not self.destCache.name then
+			table.insert(self.destCache, name)
+		end
+	end
+end
+
 function BulkMail:SendCacheBuild(destination)
 	if not self.cacheLock then
+		self:SendCacheCleanUp()
 		self.sendCache = {}
+		self:DestCacheBuild()
+		if destination ~= '' and not self.destCache.destination then return end -- no need to check for an item in the autosend list if the destination string doesn't have any
 		for bag, v in pairs(self.containerFrames) do
 			for slot, w in pairs(v) do
 				for _, f in pairs(w) do
@@ -253,7 +266,11 @@ end
 function BulkMail:AddAutoSendItem(arglist)
 	local destination = select(3, string.find(arglist, "([^%s]+)"))
 	if string.find(destination, "^|[cC]") then	--first arg is an item, not a name
-		destination = self.data.defaultDestination
+		if self.data.defaultDestination and self.data.defaultDestination ~= "" then
+			destination = self.data.defaultDestination
+		else
+			return self.cmd:msg(self.loc.ERROR_NO_DESTINATION_SUPPLIED_NO_DEFAULT_DESTINATION_SET)
+		end
 	else
 		arglist = string.sub(arglist, string.find(arglist, "%s")+1)
 	end		

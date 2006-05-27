@@ -1,3 +1,8 @@
+0.5.1:
+- Bag ID off-by-one error fixed; the leftmost bag should now be recognized
+- Significantly optimized the generation of item lists when typing a name into the To: field
+- You can now no longer add items to the AutoSend list without an explicit destination when no default destination has been set
+
 0.5.0: Initial beta release
 - Various bugfixes and debug code removed in preparation for beta release
 
