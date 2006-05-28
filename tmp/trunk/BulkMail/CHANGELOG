@@ -1,3 +1,6 @@
+0.5.2:
+- .toc fixed for Metrognome embed...lousy DOS backslashes.../mutter
+
 0.5.1:
 - Bag ID off-by-one error fixed; the leftmost bag should now be recognized
 - Significantly optimized the generation of item lists when typing a name into the To: field
@@ -28,7 +31,7 @@
 - Code cleaned up, better logic
 - First BulkMail-selected item now attached to the message if no item already attached
 
-0.3.0 -- First Beta Release
+0.3.0
 - Send-Mail interface implemented
 - Default destination for AutoSend implemented
 

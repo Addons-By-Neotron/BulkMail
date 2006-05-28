@@ -1,6 +1,8 @@
 --[[--------------------------------------------------------------------------------
-  Global/Local functions
+  Global/Local functions and variables
 -----------------------------------------------------------------------------------]]
+local metro = Metrognome:GetInstance("1")
+
 function select(n, ...)
 	return arg[n]
 end
@@ -33,8 +35,7 @@ BulkMail = AceAddon:new({
 
 
 function BulkMail:Initialize()
-	self.metro = Metrognome:GetInstance("1")
-	self.metro:Register("BMSend", self.Send, 0.5, self)
+	metro:Register("BMSend", self.Send, 0.5, self)
 	
 	BulkMailDB.profiles = BulkMailDB.profiles or {}
 	BulkMailDB.profiles[self.profilePath[2]] = BulkMailDB.profiles[self.profilePath[2]] or {}
@@ -121,7 +122,7 @@ function BulkMail:BMSendMailMailButton_OnClick()
 		self.pmsqDestination = nil
 	end
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
-		self.metro:Start("BMSend")
+		metro:Start("BMSend")
 	else
 		return self:CallScript(SendMailMailButton, "OnClick")
 	end
@@ -344,7 +345,7 @@ function BulkMail:Send()
 			self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
 			self.cmd:msg(self.loc.MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION)
 			self.cacheLock = nil
-			self.metro:Stop("BMSend")
+			metro:Stop("BMSend")
 		end
 	elseif cache then
 		local bag, slot = unpack(cache)
@@ -353,7 +354,7 @@ function BulkMail:Send()
 		SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):")) or 0)
 		self:SendCacheRemove(bag, slot)
 	else
-		self.metro:Stop("BMSend")
+		metro:Stop("BMSend")
 		self:SendCacheCleanUp()
 	end
 end

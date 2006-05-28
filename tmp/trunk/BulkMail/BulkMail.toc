@@ -6,7 +6,7 @@
 ## SavedVariables: BulkMailDB 
 ## RequiredDeps: Ace, AceGUI
 ## OptionalDeps: PeriodicTable
-Metrognome/MetrognomeLib.lua
+Metrognome\MetrognomeLib.lua
 BulkMailLocals.lua
 BulkMailUtil.lua
 BulkMail.lua
