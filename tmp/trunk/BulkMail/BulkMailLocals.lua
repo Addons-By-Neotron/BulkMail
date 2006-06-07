@@ -2,9 +2,9 @@ if not ace:LoadTranslation("BulkMail") then
 
 BulkMailLocals = {
 	NAME = "BulkMail",
-    DESCRIPTION = "Bulk mail sending made easy",
-    COMMANDS = {"/bm", "/bulkmail"},
-    CMD_OPTIONS= {},
+	DESCRIPTION = "Bulk mail sending made easy",
+	COMMANDS = {"/bm", "/bulkmail"},
+	CMD_OPTIONS= {},
 
 	MSG_SENDING_N_ITEMS = "Sending %d item(s) to %s.",
 	MSG_DEFAULT_DESTINATION = "Default destination for autosend items is |cffffff78%s|r.",

@@ -35,7 +35,7 @@ BulkMail = AceAddon:new({
 
 
 function BulkMail:Initialize()
-	metro:Register("BMSend", self.Send, 0.5, self)
+	metro:Register("BMSend", self.Send, 0.1, self)
 	
 	BulkMailDB.profiles = BulkMailDB.profiles or {}
 	BulkMailDB.profiles[self.profilePath[2]] = BulkMailDB.profiles[self.profilePath[2]] or {}
@@ -336,7 +336,7 @@ end
 	
 
 function BulkMail:Send()
-	local _, cache = next(self.sendCache)
+	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(self.pmsqDestination or self.data.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.data.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
