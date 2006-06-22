@@ -1,3 +1,11 @@
+0.6.0:
+- Now keeps separate AutoSend lists and default destinations for each faction.  New AutoSend items added will be added for the current faction only; any current autosend items will remain for both factions.  It is recommended that you remove the items you do not wish sent on characters of your current faction.
+- Item send queue is now processed much faster.
+- BulkMail will ignore AutoSend items for which your current character is the destination.
+- BulkMail will no longer clear items which have been added at the mailbox when you edit the To: field.
+- TOC updated.
+- Many bug-fixes and improvements
+
 0.5.2:
 - .toc fixed for Metrognome embed...lousy DOS backslashes.../mutter
 

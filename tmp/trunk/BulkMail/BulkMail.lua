@@ -20,8 +20,8 @@ end
 BulkMail = AceAddon:new({
 	name            = BulkMailLocals.NAME,
 	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.5.2",
-	releaseDate     = "05-28-2006",
+	version         = "0.6.0",
+	releaseDate     = "06-22-2006",
 	aceCompatible   = "103",
 	author          = "Mynithrosil of Feathermoon",
 	email           = "hyperactiveChipmunk@gmail.com",
@@ -43,8 +43,17 @@ function BulkMail:Initialize()
 	self.data = BulkMailDB.profiles[self.profilePath[2]]
 	self.data = self.data or {}
 	
+	local faction = UnitFactionGroup('player')
 	self.data.autoSendListItems = self.data.autoSendListItems or {}
-	self.data.defaultDestination = self.data.defaultDestination or ''
+	self.data.autoSendListItems[faction] = self.data.autoSendListItems[faction] or {}
+	-- back-compat conversion
+	if not next(self.data.autoSendListItems[faction]) then
+		for itemID, dest in pairs(self.data.autoSendListItems) do
+			if type(dest) == 'string' then self.data.autoSendListItems[faction][itemID] = dest end
+		end
+	end
+		
+	self.data.defaultDestination = type(self.data.defaultDestination) == 'table' and self.data.defaultDestination or {}
 end
 
 --[[--------------------------------------------------------------------------------
@@ -55,6 +64,10 @@ function BulkMail:Enable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
 	self.containerFrames = {}
+	local faction = UnitFactionGroup('player')
+	self.autoSendListItems = self.data.autoSendListItems[faction] or {}
+	self.defaultDestination = self.data.defaultDestination[faction] or ''
+	
 end
 
 --[[--------------------------------------------------------------------------------
@@ -160,24 +173,24 @@ end
 
 function BulkMail:DestCacheBuild()
 	self.destCache = {}
-	for _, name in pairs(self.data.autoSendListItems) do
-		if not self.destCache.name then
-			table.insert(self.destCache, name)
+	for _, dest in pairs(self.autoSendListItems) do
+		if not self.destCache.dest then
+			table.insert(self.destCache, dest)
 		end
 	end
 end
 
 function BulkMail:SendCacheBuild(destination)
 	if not self.cacheLock then
-		self:SendCacheCleanUp()
-		self.sendCache = {}
+		self:SendCacheCleanUp(true)
 		self:DestCacheBuild()
-		if destination ~= '' and not self.destCache.destination then return end -- no need to check for an item in the autosend list if the destination string doesn't have any
+		if destination ~= '' and not self.destCache[destination] then return end -- no need to check for an item in the autosend list if the destination string doesn't have any
 		for bag, v in pairs(self.containerFrames) do
 			for slot, w in pairs(v) do
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-					if self.data.autoSendListItems[itemID] and (destination == "" or string.lower(destination) == self.data.autoSendListItems[itemID]) then
+					local dest = self.autoSendListItems[itemID]
+					if dest and dest ~= UnitName('player') and (destination == "" or dest == string.lower(destination)) then
 						self:SendCacheAdd(bag, slot)
 					end
 				end
@@ -191,7 +204,7 @@ end
 function BulkMail:SendCachePos(frame, slot)
 	local bag = slot and frame or frame:GetParent():GetID()
 	slot = slot or frame:GetID()
-	if self.sendCache then
+	if self.sendCache and next(self.sendCache) then
 		for i, v in pairs(self.sendCache) do
 			if v[1] == bag and v[2] == slot then
 				return i
@@ -238,14 +251,15 @@ function BulkMail:SendCacheRemove(frame, slot)
 	end
 end
 
-function BulkMail:SendCacheCleanUp()
-	if self.sendCache then
+function BulkMail:SendCacheCleanUp(autoOnly)
+	if self.sendCache and next(self.sendCache) then
 		for _, cache in pairs(self.sendCache) do
-			self:SendCacheRemove(unpack(cache))
+			if not autoOnly or self.autoSendListItems[select(3, string.find(GetContainerItemLink(unpack(cache)), "item:(%d+)"))] then
+				self:SendCacheRemove(unpack(cache))
+			end
 		end
-		self.sendCache = nil
-		self.cacheLock = false
 	end
+	self.cacheLock = false
 end
 
 function BulkMail:SendCacheToggle(frame, slot)
@@ -259,16 +273,16 @@ function BulkMail:SendCacheToggle(frame, slot)
 end
 
 function BulkMail:ListAutoSendItems()
-	for item, dest in pairs(self.data.autoSendListItems) do
-		self.cmd:msg(GetItemLink(item) .. " - " .. dest)
+	for itemID, dest in pairs(self.autoSendListItems) do
+		self.cmd:msg(GetItemLink(itemID) .. " - " .. dest)
 	end
 end
 
 function BulkMail:AddAutoSendItem(arglist)
 	local destination = select(3, string.find(arglist, "([^%s]+)"))
 	if string.find(destination, "^|[cC]") then	--first arg is an item, not a name
-		if self.data.defaultDestination and self.data.defaultDestination ~= "" then
-			destination = self.data.defaultDestination
+		if self.defaultDestination ~= "" then
+			destination = self.defaultDestination
 		else
 			return self.cmd:msg(self.loc.ERROR_NO_DESTINATION_SUPPLIED_NO_DEFAULT_DESTINATION_SET)
 		end
@@ -276,8 +290,8 @@ function BulkMail:AddAutoSendItem(arglist)
 		arglist = string.sub(arglist, string.find(arglist, "%s")+1)
 	end		
 	for itemID in string.gfind(arglist, "item:(%d+)") do
-		if itemID and self.data.autoSendListItems[tostring(itemID)] ~= destination then
-			self.data.autoSendListItems[tostring(itemID)] = destination
+		if itemID and self.autoSendListItems[tostring(itemID)] ~= destination then
+			self.data.autoSendListItems[UnitFactionGroup('player')][tostring(itemID)] = destination
 		else
 			self.cmd:msg(self.loc.ERROR_ITEM_ALREADY_IN_AUTOSEND_LIST)
 		end
@@ -286,8 +300,8 @@ end
 
 function BulkMail:RemoveAutoSendItem(arglist)
 	for itemID in string.gfind(arglist, "item:(%d+)") do
-		if self.data.autoSendListItems[itemID] then
-			self.data.autoSendListItems[itemID] = nil
+		if self.autoSendListItems[itemID] then
+			self.autoSendListItems[itemID] = nil
 		else
 			self.cmd:msg(self.loc.ERROR_ITEM_NOT_IN_AUTOSEND_LIST)
 		end
@@ -295,16 +309,16 @@ function BulkMail:RemoveAutoSendItem(arglist)
 end
 
 function BulkMail:RemoveAutoSendDestination(destination)
-	for itemID, dest in pairs(self.data.autoSendListItems) do
+	for itemID, dest in pairs(self.autoSendListItems) do
 		if destination == dest then
-			self.data.autoSendListItems[itemID] = nil
+			self.autoSendListItems[itemID] = nil
 		end
 	end
 end
 
 function BulkMail:ClearAutoSendList(confirm)
 	if string.lower(confirm) == "confirm" then
-		self.data.autoSendListItems = {}
+		self.autoSendListItems = {}
 	else
 		self.cmd:msg(self.loc.ERROR_TYPE_CONFIRM_ON_CLEAR)
 	end
@@ -312,10 +326,12 @@ end
 
 function BulkMail:SetDefaultDestination(name)
 	if name ~= '' then
-		self.data.defaultDestination = string.lower(name)
+		local faction = UnitFactionGroup('player')
+		self.data.defaultDestination[faction] = string.lower(name)
+		self.defaultDestination = self.data.defaultDestination[faction]
 	end
-	if self.data.defaultDestination and self.data.defaultDestination ~= '' then
-		self.cmd:msg(string.format(self.loc.MSG_DEFAULT_DESTINATION, self.data.defaultDestination))
+	if self.defaultDestination ~= '' then
+		self.cmd:msg(string.format(self.loc.MSG_DEFAULT_DESTINATION, self.defaultDestination))
 	else
 		self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
 	end
@@ -338,10 +354,10 @@ end
 function BulkMail:Send()
 	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
-		SendMailNameEditBox:SetText(self.pmsqDestination or self.data.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.data.defaultDestination or '')
+		SendMailNameEditBox:SetText(self.pmsqDestination or self.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.defaultDestination)
 		if SendMailNameEditBox:GetText() ~= '' then
 			SendMailFrame_SendMail()
-		elseif not self.data.DefaultDestination then
+		elseif self.defaultDestination == '' then
 			self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
 			self.cmd:msg(self.loc.MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION)
 			self.cacheLock = nil
@@ -362,6 +378,7 @@ end
 function BulkMail:ShowGUI()
 	BulkMail.gui:Show()
 end
+
 --[[--------------------------------------------------------------------------------
   Register the Addon
 -----------------------------------------------------------------------------------]]
