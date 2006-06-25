@@ -5,6 +5,7 @@
 ## SVN: 3143
 ## SavedVariables: BulkMailDB 
 ## RequiredDeps: Ace, AceGUI
+CompostLib\CompostLib.lua
 Metrognome\MetrognomeLib.lua
 BulkMailLocals.lua
 BulkMailUtil.lua
