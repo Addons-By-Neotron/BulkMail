@@ -32,6 +32,10 @@ BulkMail = AceAddon:new({
 	defaults        = DEFAULT_OPTIONS,
 	cmd             = AceChatCmd:new({"/bulkmail", "/bm"}, BulkMailLocals.CMD_OPTIONS),
 	loc             = BulkMailLocals,
+	
+	containerFrames = {},
+	destCache       = {},
+	sendCache       = {},
 })
 
 
@@ -133,7 +137,7 @@ function BulkMail:BMSendMailMailButton_OnClick()
 	self.cacheLock = true
 	self.pmsqDestination = SendMailNameEditBox:GetText()
 	if SendMailNameEditBox:GetText() == '' then
-		self.pmsqDestination = wwww
+		self.pmsqDestination = nil
 	end
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
 		metro:Start("BMSend")
@@ -160,7 +164,7 @@ end
 function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a table consisting of all frames which are container buttons
 	local enum = EnumerateFrames
 	local f = enum()
-	self.containerFrames = next(next(self.containerFrames)) and compost:Erase(self.containerFrames, 3) or compost:Erase(self.containerFrames)
+	self.containerFrames = compost:Erase(self.containerFrames)
 	while f do
 		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
 		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
@@ -240,7 +244,8 @@ function BulkMail:SendCacheRemove(frame, slot)
 	slot = slot or frame:GetID()
 	local i = BulkMail:SendCachePos(bag, slot)
 	if i then
-		compost:Reclaim(self.sendCache[i])
+		print(i)
+		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
@@ -259,9 +264,7 @@ function BulkMail:SendCacheCleanUp(autoOnly)
 				self:SendCacheRemove(unpack(cache))
 			end
 		end
-		if not next(self.sendCache) then
-			compost:Reclaim(self.sendCache, 2)
-		end
+
 	end
 	self.cacheLock = false
 end
