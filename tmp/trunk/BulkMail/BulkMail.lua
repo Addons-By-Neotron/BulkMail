@@ -2,6 +2,7 @@
   Global/Local functions and variables
 -----------------------------------------------------------------------------------]]
 local metro = Metrognome:GetInstance("1")
+local compost = CompostLib:GetInstance("compost-1")
 
 function select(n, ...)
 	return arg[n]
@@ -63,7 +64,7 @@ end
 function BulkMail:Enable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
-	self.containerFrames = {}
+	
 	local faction = UnitFactionGroup('player')
 	self.autoSendListItems = self.data.autoSendListItems[faction] or {}
 	self.defaultDestination = self.data.defaultDestination[faction] or ''
@@ -132,7 +133,7 @@ function BulkMail:BMSendMailMailButton_OnClick()
 	self.cacheLock = true
 	self.pmsqDestination = SendMailNameEditBox:GetText()
 	if SendMailNameEditBox:GetText() == '' then
-		self.pmsqDestination = nil
+		self.pmsqDestination = wwww
 	end
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
 		metro:Start("BMSend")
@@ -159,12 +160,12 @@ end
 function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a table consisting of all frames which are container buttons
 	local enum = EnumerateFrames
 	local f = enum()
-	self.containerFrames = {}
+	self.containerFrames = next(next(self.containerFrames)) and compost:Erase(self.containerFrames, 3) or compost:Erase(self.containerFrames)
 	while f do
 		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
 		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
-			self.containerFrames[bag] = self.containerFrames[bag] or {}
-			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
+			self.containerFrames[bag] = self.containerFrames[bag] or compost:Acquire()
+			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or compost:Acquire()
 			table.insert(self.containerFrames[bag][slot], f)
 		end
 		f = enum(f)
@@ -172,7 +173,7 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 end
 
 function BulkMail:DestCacheBuild()
-	self.destCache = {}
+	self.destCache = compost:Erase(self.destCache)
 	for _, dest in pairs(self.autoSendListItems) do
 		if not self.destCache.dest then
 			table.insert(self.destCache, dest)
@@ -217,7 +218,7 @@ function BulkMail:SendCacheAdd(frame, slot)
 	local bag = slot and frame or frame:GetParent():GetID()
 	slot = slot or frame:GetID()
 	if not self.sendCache then
-		self.sendCache = {}
+		self.sendCache = compost:Acquire()
 	end
 	if not self.containerFrames then
 		InitializeContainerFrames()
@@ -239,7 +240,7 @@ function BulkMail:SendCacheRemove(frame, slot)
 	slot = slot or frame:GetID()
 	local i = BulkMail:SendCachePos(bag, slot)
 	if i then
-		self.sendCache[i] = nil
+		compost:Reclaim(self.sendCache[i])
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
@@ -257,6 +258,9 @@ function BulkMail:SendCacheCleanUp(autoOnly)
 			if not autoOnly or self.autoSendListItems[select(3, string.find(GetContainerItemLink(unpack(cache)), "item:(%d+)"))] then
 				self:SendCacheRemove(unpack(cache))
 			end
+		end
+		if not next(self.sendCache) then
+			compost:Reclaim(self.sendCache, 2)
 		end
 	end
 	self.cacheLock = false
@@ -360,7 +364,7 @@ function BulkMail:Send()
 		elseif self.defaultDestination == '' then
 			self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
 			self.cmd:msg(self.loc.MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION)
-			self.cacheLock = nil
+			self.cacheLock = false
 			metro:Stop("BMSend")
 		end
 	elseif cache then
