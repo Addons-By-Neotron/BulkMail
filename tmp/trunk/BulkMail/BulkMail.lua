@@ -244,7 +244,6 @@ function BulkMail:SendCacheRemove(frame, slot)
 	slot = slot or frame:GetID()
 	local i = BulkMail:SendCachePos(bag, slot)
 	if i then
-		print(i)
 		self.sendCache[i] = nil
 		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
