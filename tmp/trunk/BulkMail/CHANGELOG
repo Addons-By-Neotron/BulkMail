@@ -1,3 +1,6 @@
+0.6.1:
+- Name filtering on AutoSend fixed
+
 0.6.0:
 - Now keeps separate AutoSend lists and default destinations for each faction.  New AutoSend items added will be added for the current faction only; any current autosend items will remain for both factions.  It is recommended that you remove the items you do not wish sent on characters of your current faction.
 - Item send queue is now processed much faster.
