@@ -179,9 +179,7 @@ end
 function BulkMail:DestCacheBuild()
 	self.destCache = compost:Erase(self.destCache)
 	for _, dest in pairs(self.autoSendListItems) do
-		if not self.destCache.dest then
-			table.insert(self.destCache, dest)
-		end
+		self.destCache[dest] = 1
 	end
 end
 
@@ -195,7 +193,7 @@ function BulkMail:SendCacheBuild(destination)
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
 					local dest = self.autoSendListItems[itemID]
-					if dest and dest ~= UnitName('player') and (destination == "" or dest == string.lower(destination)) then
+					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == string.lower(destination)) then
 						self:SendCacheAdd(bag, slot)
 					end
 				end
