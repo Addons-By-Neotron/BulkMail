@@ -147,7 +147,7 @@ function frame:OnClearClick()
 end
 
 local function GetLockedContainerItem()
-	for bag=0, NUM_BAG_SLOTS - 1 do
+	for bag=0, NUM_BAG_SLOTS do
 		for slot=1, GetContainerNumSlots(bag) do
 			if select(3, GetContainerItemInfo(bag, slot)) then
 				return bag, slot
