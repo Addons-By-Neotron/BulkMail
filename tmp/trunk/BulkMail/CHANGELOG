@@ -2,6 +2,8 @@
 - Ace2 upgradinations.
 - Recommended you do a fresh checkout, as some library paths have changed.
 - Ditto on your saved variables file.  'Nuke and pave' is the phrase of the day!
+- New feature: QuickSend
+	+ Hold Ctrl and Shift while clicking an inventory item at a mailbox to send it to its AutoSend destination (or the default, if none is set for that item)
 
 0.6.1:
 - Name filtering on AutoSend fixed

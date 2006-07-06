@@ -5,6 +5,8 @@ function BulkMail_Locale_enUS()
 		["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."] = "Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.",
 		["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."] = "WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame.",
 		["Item recipient is this character.  Not sending."] = "Item recipient is this character.  Not sending.",
+		["Item cannot be mailed: %s."] = "Item cannot be mailed: %s.",
+		["Cannot determine the item clicked."] = "Cannot determine the item clicked.",
 
 		["This item is already in your autosend list.  Please remove it first or use |cff00ffaa/bulkmail autosend add|r to change its AutoSend destination."] = "This item is already in your autosend list.  Please remove it first or use |cff00ffaa/bulkmail autosend add|r to change its AutoSend destination.",
 		["This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it."] = "This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.",
