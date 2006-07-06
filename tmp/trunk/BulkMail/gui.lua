@@ -158,7 +158,7 @@ end
 
 function frame:OnSendClick()
 	if not BulkMail.sendCache then return end
-	BulkMail:BMSendMailMailButton_OnClick()
+	BulkMail:SendMailMailButton_OnClick()
 end
 
 function frame:OnDropClick()
