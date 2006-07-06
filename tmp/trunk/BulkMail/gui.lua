@@ -1,8 +1,9 @@
+local L = BulkMail.L
 local frame = AceGUI:new()
 local config = {
 	name      = "BulkMail_GUIFrame",
 	type      = ACEGUI_DIALOG,
-	title     = BulkMailLocals.gui.title,
+	title     = "BulkMail",
 	isSpecial = TRUE,
 	backdrop  = "small",
 	width     = 300,
@@ -12,7 +13,7 @@ local config = {
 	elements  = {
 		Items = {
 			type        = ACEGUI_LISTBOX,
-			title       = BulkMailLocals.gui.items,
+			title       = L"Items to be sent (Alt-Click to add/remove):",
 			width       = 276,
 			height      = 288,
 			anchors     = {
@@ -25,7 +26,7 @@ local config = {
 		},
 		Clear = {
 			type    = ACEGUI_BUTTON,
-			title   = BulkMailLocals.gui.clear,
+			title   = L"Clear",
 			width   = 98,
 			height  = 26,
 			anchors = {
@@ -35,7 +36,7 @@ local config = {
 		},
 		Send = {
 			type    = ACEGUI_BUTTON,
-			title   = BulkMailLocals.gui.send,
+			title   = L"Send",
 			width   = 64,
 			height  = 26,
 			anchors = {
@@ -53,7 +54,7 @@ local config = {
 			elements = {
 				DropButton = {
 					type    = ACEGUI_BUTTON,
-					title   = BulkMailLocals.gui.dropBox,
+					title   = "Drop items here for Sending",
 					width   = 272,
 					height  = 56,
 					anchors = {
@@ -89,7 +90,7 @@ function frame:FillItemsListBox()
 	
 	local sendCache = BulkMail.sendCache
 	if not sendCache or table.getn(sendCache) == 0 then
-		self.itemsTable = {BulkMailLocals.gui.noitems}
+		self.itemsTable = {L"No items selected"}
 		self.idTable = nil
 		self.bsTable = nil
 		return self.itemsTable
@@ -105,7 +106,7 @@ function frame:FillItemsListBox()
 		table.insert(self.bsTable, v)
 	end
 
-	return self.itemsTable or {BulkMailLocals.gui.noitems}
+	return self.itemsTable or {L"No items selected"}
 end
 
 function frame:Build()
@@ -162,7 +163,7 @@ end
 
 function frame:OnDropClick()
 	if GetSendMailItem() then
-		BulkMail.cmd:msg(BulkMail.loc.MSG_MULTIPLE_LOCKED_ITEM_WARNING)
+		BulkMail:Print(L"WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame.")
 	end
 	if CursorHasItem() and GetLockedContainerItem() then
 		BulkMail:SendCacheAdd(GetLockedContainerItem())

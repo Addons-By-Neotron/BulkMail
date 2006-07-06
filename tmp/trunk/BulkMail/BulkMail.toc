@@ -1,13 +1,25 @@
 ## Interface: 11100
-## Title: BulkMail |cff007fff-Ace-|r
+## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made easy
-## Version: 0.6.1
-## X-SVN: 3820
+## Version: 0.7.0
+## Author: hyperactiveChipmunk
+## X-Category: Mail
+## X-eMail: hyperactiveChipmunk@gmail.com
+## X-Website: http://hyperactiveChipmunk.wowinterface.com
 ## SavedVariables: BulkMailDB 
-## RequiredDeps: Ace, AceGUI
-CompostLib\CompostLib.lua
-Metrognome\MetrognomeLib.lua
-BulkMailLocals.lua
+## RequiredDeps: AceGUI
+lib\AceLibrary\AceLibrary.lua
+lib\AceOO\AceOO-2.0.lua
+lib\AceConsole\AceConsole-2.0.lua
+lib\AceEvent\AceEvent-2.0.lua
+lib\AceAddon\AceAddon-2.0.lua
+lib\AceHook\AceHook-2.0.lua
+lib\AceDB\AceDB-2.0.lua
+lib\AceDebug\AceDebug-2.0.lua
+lib\AceLocale\AceLocale-2.0.lua
+lib\CompostLib\CompostLib.lua
+lib\Metrognome\MetrognomeLib.lua
+BulkMail-enUS.lua
 BulkMailUtil.lua
 BulkMail.lua
 gui.xml

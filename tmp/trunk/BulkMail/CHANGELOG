@@ -1,3 +1,8 @@
+0.7.0:
+- Ace2 upgradinations.
+- Recommended you do a fresh checkout, as some library paths have changed.
+- Ditto on your saved variables file.  'Nuke and pave' is the phrase of the day!
+
 0.6.1:
 - Name filtering on AutoSend fixed
 

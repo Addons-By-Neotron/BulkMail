@@ -1,3 +1,7 @@
+function select(n, ...)
+	return arg[n]
+end
+
 ace:RegisterFunctions({
 version = 1.01,
 

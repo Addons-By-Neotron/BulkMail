@@ -1,12 +1,5 @@
---[[--------------------------------------------------------------------------------
-  Global/Local functions and variables
------------------------------------------------------------------------------------]]
 local metro = Metrognome:GetInstance("1")
 local compost = CompostLib:GetInstance("compost-1")
-
-function select(n, ...)
-	return arg[n]
-end
 
 local function GetItemLink(item)
 	local name, _, rarity = GetItemInfo(item)
@@ -18,66 +11,90 @@ local function GetItemLink(item)
 	end
 end
 
-BulkMail = AceAddon:new({
-	name            = BulkMailLocals.NAME,
-	description     = BulkMailLocals.DESCRIPTION,
-	version         = "0.6.1",
-	releaseDate     = "07-02-2006",
-	aceCompatible   = "103",
-	author          = "Mynithrosil of Feathermoon",
-	email           = "hyperactiveChipmunk@gmail.com",
-	website         = "http://hyperactiveChipmunk.wowinterface.com",
-	category        = "other",
-	db              = AceDatabase:new("BulkMailDB"),
-	defaults        = DEFAULT_OPTIONS,
-	cmd             = AceChatCmd:new({"/bulkmail", "/bm"}, BulkMailLocals.CMD_OPTIONS),
-	loc             = BulkMailLocals,
-	
-	containerFrames = {},
-	destCache       = {},
-	sendCache       = {},
-})
+BulkMail = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "AceHook-2.0", "AceConsole-2.0")
 
+local L = AceLibrary("AceLocale-2.0"):new("BulkMail")
+BulkMail.L = L
 
-function BulkMail:Initialize()
+function BulkMail:OnInitialize()
+	self:RegisterDB("BulkMailDB")
+	self:RegisterDefaults('realm', {
+		autoSendListItems = {},
+		defaultDestination = nil,
+	})
+	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
+		type = "group",
+		args = {
+			defaultdest = {
+				name  = "Default destination", type = "text",
+				desc  = "Set the default recipient of autosent items",
+				get   = function() return self.db.realm.defaultDestination end,
+				set   = function(dest) self.db.realm.defaultDestination = dest end,
+				usage = "<destnation>",
+			},
+			
+			autosend = {
+				name = "AutoSend", type = "group",
+				desc = "AutoSend Options", aliases = "as",
+				args = {
+					list = {
+						name  = "list", type = "execute",
+						desc  = "Print current AutoSend list.",
+						aliases = "ls",
+						func  = "ListAutoSendItems",
+					},
+					add = {
+						name  = "add", type = "text",
+						desc  = "Add items to the AutoSend list.",
+						input = true,
+						set   = "AddAutoSendItem",
+						get   = false,
+						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]") end,
+						error = L"Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r.",
+						usage = "[destination] <item> [item2 item3 ...]",
+					},
+					rm = {
+						name  = "remove", type = "text",
+						aliases = "rm, delete, del",
+						desc  = "Remove items from the AutoSend list.",
+						input = true,
+						set   = "RemoveAutoSendItem",
+						get   = false,
+						usage = "<item> [item2 item3 ...]",
+					},
+					rmdest = {
+						name  = "rmdest", type = "text",
+						desc  = "Remove all items corresponding to a particular destination from your AutoSend list.",
+						input = true,
+						set   = "RemoveAutoSendDestination",
+						get   = false,
+						usage = "<destination>",
+					},
+					clear = {
+						name  = "clear", type = "text",
+						desc  = "Clear AutoSend list completely.",
+						set   = "ClearAutoSendList",
+						get   = false,
+						validate = function(confirm) if confirm == "CONFIRM" then return true end end,
+						error = "You must type 'CONFIRM' to clear.",
+						usage = "CONFIRM",
+					},
+				},				
+			},
+		},
+	})
+
 	metro:Register("BMSend", self.Send, 0.1, self)
 	
-	BulkMailDB.profiles = BulkMailDB.profiles or {}
-	BulkMailDB.profiles[self.profilePath[2]] = BulkMailDB.profiles[self.profilePath[2]] or {}
-	
-	self.data = BulkMailDB.profiles[self.profilePath[2]]
-	self.data = self.data or {}
-	
-	local faction = UnitFactionGroup('player')
-	self.data.autoSendListItems = self.data.autoSendListItems or {}
-	self.data.autoSendListItems[faction] = self.data.autoSendListItems[faction] or {}
-	-- back-compat conversion
-	if not next(self.data.autoSendListItems[faction]) then
-		for itemID, dest in pairs(self.data.autoSendListItems) do
-			if type(dest) == 'string' then self.data.autoSendListItems[faction][itemID] = dest end
-		end
-	end
-		
-	self.data.defaultDestination = type(self.data.defaultDestination) == 'table' and self.data.defaultDestination or {}
+	self.containerFrames = {}
+	self.destCache       = {}
+	self.sendCache       = {}
 end
 
---[[--------------------------------------------------------------------------------
-  Addon Enabling/Disabling
------------------------------------------------------------------------------------]]
-
-function BulkMail:Enable()
+function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
-	
-	local faction = UnitFactionGroup('player')
-	self.autoSendListItems = self.data.autoSendListItems[faction] or {}
-	self.defaultDestination = self.data.defaultDestination[faction] or ''
-	
 end
-
---[[--------------------------------------------------------------------------------
-  Event Processing
------------------------------------------------------------------------------------]]
 
 function BulkMail:MAIL_SHOW()
 	if not Bagnon then
@@ -95,11 +112,7 @@ function BulkMail:MAIL_SHOW()
 end
 
 function BulkMail:MAIL_CLOSED()
-	self:Unhook("ContainerFrameItemButton_OnClick")
-	self:Unhook("SendMailFrame_CanSend")
-	self:UnhookScript(SendMailMailButton, "OnClick")
-	self:UnhookScript(MailFrameTab2, "OnClick")
-	self:UnhookScript(SendMailNameEditBox, "OnTextChanged")
+	self:UnhookAll()
 	self:SendCacheCleanUp()
 	for bag, slot in pairs(self.containerFrames) do
 		for _, f in pairs(slot) do
@@ -117,12 +130,12 @@ function BulkMail:BMContainerFrameItemButton_OnClick(button, ignoreModifiers)
 		self:SendCacheToggle(this)
 	else
 		self:SendCacheRemove(this)
-		return self:CallHook("ContainerFrameItemButton_OnClick", button, ignoreModifiers)
+		return self.hooks.ContainerFrameItemButton_OnClick.orig(button, ignoreModifiers)
 	end
 end
 
 function BulkMail:BMSendMailFrame_CanSend()
-	self:CallHook("SendMailFrame_CanSend")
+	self.hooks.SendMailFrame_CanSend.orig()
 	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
@@ -142,19 +155,19 @@ function BulkMail:BMSendMailMailButton_OnClick()
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
 		metro:Start("BMSend")
 	else
-		return self:CallScript(SendMailMailButton, "OnClick")
+		return self.hooks[SendMailMailButton].OnClick.orig()
 	end
 end
 
 function BulkMail:BMMailFrameTab2_OnClick()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
 	BulkMail.gui:Show()
-	return self:CallScript(MailFrameTab2, "OnClick")
+	return self.hooks[MailFrameTab2].OnClick.orig()
 end
 
 function BulkMail:BMSendMailNameEditBox_OnTextChanged()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
-	return self:CallScript(SendMailNameEditBox, "OnTextChanged")
+	return self.hooks[SendMailNameEditBox].OnTextChanged.orig()
 end
 
 --[[--------------------------------------------------------------------------------
@@ -178,7 +191,7 @@ end
 
 function BulkMail:DestCacheBuild()
 	self.destCache = compost:Erase(self.destCache)
-	for _, dest in pairs(self.autoSendListItems) do
+	for _, dest in pairs(self.db.realm.autoSendListItems) do
 		self.destCache[dest] = 1
 	end
 end
@@ -192,7 +205,7 @@ function BulkMail:SendCacheBuild(destination)
 			for slot, w in pairs(v) do
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-					local dest = self.autoSendListItems[itemID]
+					local dest = self.db.realm.autoSendListItems[itemID]
 					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == string.lower(destination)) then
 						self:SendCacheAdd(bag, slot)
 					end
@@ -257,7 +270,7 @@ end
 function BulkMail:SendCacheCleanUp(autoOnly)
 	if self.sendCache and next(self.sendCache) then
 		for _, cache in pairs(self.sendCache) do
-			if not autoOnly or self.autoSendListItems[select(3, string.find(GetContainerItemLink(unpack(cache)), "item:(%d+)"))] then
+			if not autoOnly or self.db.realm.autoSendListItems[select(3, string.find(GetContainerItemLink(unpack(cache)), "item:(%d+)"))] then
 				self:SendCacheRemove(unpack(cache))
 			end
 		end
@@ -277,67 +290,48 @@ function BulkMail:SendCacheToggle(frame, slot)
 end
 
 function BulkMail:ListAutoSendItems()
-	for itemID, dest in pairs(self.autoSendListItems) do
-		self.cmd:msg(GetItemLink(itemID) .. " - " .. dest)
+	for itemID, dest in pairs(self.db.realm.autoSendListItems) do
+		self:Print(GetItemLink(itemID) .. " - " .. dest)
 	end
 end
 
-function BulkMail:AddAutoSendItem(arglist)
-	local destination = select(3, string.find(arglist, "([^%s]+)"))
-	if string.find(destination, "^|[cC]") then	--first arg is an item, not a name
-		if self.defaultDestination ~= "" then
-			destination = self.defaultDestination
-		else
-			return self.cmd:msg(self.loc.ERROR_NO_DESTINATION_SUPPLIED_NO_DEFAULT_DESTINATION_SET)
-		end
-	else
-		arglist = string.sub(arglist, string.find(arglist, "%s")+1)
-	end		
-	for itemID in string.gfind(arglist, "item:(%d+)") do
-		if itemID and self.autoSendListItems[tostring(itemID)] ~= destination then
-			self.data.autoSendListItems[UnitFactionGroup('player')][tostring(itemID)] = destination
-		else
-			self.cmd:msg(self.loc.ERROR_ITEM_ALREADY_IN_AUTOSEND_LIST)
+function BulkMail:AddAutoSendItem(...)
+	if string.find(arg[1], "^|[cC]") then	--first arg is an item, not a name
+		table.insert(arg, 1, self.db.realm.defaultDestination)
+	end
+
+	for i = 2, table.getn(arg) do
+		local itemID = select(3, string.find(arg[i], "item:(%d+)"))
+		if itemID then
+			self.db.realm.autoSendListItems[tostring(itemID)] = arg[1]
+			self:Print("%s - %s", arg[i], arg[1])
 		end
 	end
 end
 
 function BulkMail:RemoveAutoSendItem(arglist)
 	for itemID in string.gfind(arglist, "item:(%d+)") do
-		if self.autoSendListItems[itemID] then
-			self.autoSendListItems[itemID] = nil
+		if self.db.realm.autoSendListItems[itemID] then
+			self.db.realm.autoSendListItems[itemID] = nil
 		else
-			self.cmd:msg(self.loc.ERROR_ITEM_NOT_IN_AUTOSEND_LIST)
+			self:Print(L"This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
 		end
 	end
 end
 
 function BulkMail:RemoveAutoSendDestination(destination)
-	for itemID, dest in pairs(self.autoSendListItems) do
+	for itemID, dest in pairs(self.db.realm.autoSendListItems) do
 		if destination == dest then
-			self.autoSendListItems[itemID] = nil
+			self.db.realm.autoSendListItems[itemID] = nil
 		end
 	end
 end
 
 function BulkMail:ClearAutoSendList(confirm)
 	if string.lower(confirm) == "confirm" then
-		self.autoSendListItems = {}
+		self.db.realm.autoSendListItems = {}
 	else
-		self.cmd:msg(self.loc.ERROR_TYPE_CONFIRM_ON_CLEAR)
-	end
-end
-
-function BulkMail:SetDefaultDestination(name)
-	if name ~= '' then
-		local faction = UnitFactionGroup('player')
-		self.data.defaultDestination[faction] = string.lower(name)
-		self.defaultDestination = self.data.defaultDestination[faction]
-	end
-	if self.defaultDestination ~= '' then
-		self.cmd:msg(string.format(self.loc.MSG_DEFAULT_DESTINATION, self.defaultDestination))
-	else
-		self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
+		self:Print(L"You must type 'confirm' to clear")
 	end
 end
 
@@ -358,12 +352,12 @@ end
 function BulkMail:Send()
 	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
-		SendMailNameEditBox:SetText(self.pmsqDestination or self.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.defaultDestination)
+		SendMailNameEditBox:SetText(self.pmsqDestination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.realm.defaultDestination)
 		if SendMailNameEditBox:GetText() ~= '' then
 			SendMailFrame_SendMail()
-		elseif self.defaultDestination == '' then
-			self.cmd:msg(self.loc.MSG_NO_DEFAULT_DESTINATION)
-			self.cmd:msg(self.loc.MSG_ENTER_NAME_OR_SET_DEFAULT_DESTINATION)
+		elseif self.db.realm.defaultDestination == '' then
+			self:Print(L"No default destination set.")
+			self:Print(L"Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.")
 			self.cacheLock = false
 			metro:Stop("BMSend")
 		end
@@ -382,9 +376,3 @@ end
 function BulkMail:ShowGUI()
 	BulkMail.gui:Show()
 end
-
---[[--------------------------------------------------------------------------------
-  Register the Addon
------------------------------------------------------------------------------------]]
-
-BulkMail:RegisterForLoad()
