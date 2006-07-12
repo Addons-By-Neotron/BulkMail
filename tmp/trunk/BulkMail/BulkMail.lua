@@ -16,13 +16,15 @@ BulkMail.L = L
 local compost  = AceLibrary("Compost-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
 local metro    = AceLibrary("Metrognome-2.0")
+local pt       = PeriodicTableEmbed:GetInstance("1")
 
 function BulkMail:OnInitialize()
 	self:RegisterDB("BulkMailDB")
 	self:RegisterDefaults('realm', {
 		autoSendListItems = {},
 	})
-	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
+	
+	local args = {
 		type = "group",
 		args = {
 			defaultdest = {
@@ -49,7 +51,7 @@ function BulkMail:OnInitialize()
 						input = true,
 						set   = "AddAutoSendItem",
 						get   = false,
-						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]") end,
+						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]" or "^pt:") end,
 						error = L"Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r.",
 						usage = "[destination] <item> [item2 item3 ...]",
 					},
@@ -82,13 +84,21 @@ function BulkMail:OnInitialize()
 				},				
 			},
 		},
-	})
+	}
+	
+	self:RegisterChatCommand({"/bulkmail", "/bm"}, args)
+	self.dewdrop = AceLibrary("Dewdrop-2.0")
+	self.dewdrop:Register(BulkMail_GUIFrame,
+			'children', args,
+			'dontHook', true
+		)
 
 	metro:Register("BMSend", self.Send, 0.1, self)
 	
-	self.containerFrames = {}
-	self.destCache       = {}
-	self.sendCache       = {}
+	self.containerFrames = compost:Acquire()
+	self.destCache       = compost:Acquire()
+	self.sendCache       = compost:Acquire()
+	self.ptSetsCache     = compost:Acquire()
 end
 
 function BulkMail:OnEnable()
@@ -200,16 +210,33 @@ function BulkMail:DestCacheBuild()
 	end
 end
 
+function BulkMail:PTSetsCacheBuild()
+	self.ptSetsCache = compost:Erase(self.ptSetsCache)
+	for set in pairs(self.db.realm.autoSendListItems) do
+		if string.find(set, "^pt:") then
+			table.insert(self.ptSetsCache, select(3, string.find(set, "pt:(%w+)")))
+		end
+	end
+end
+
+function BulkMail:GetPTSendDest(itemID)
+	local sets = pt:ItemInSets(tonumber(itemID), self.ptSetsCache)
+	if sets then
+		return self.db.realm.autoSendListItems["pt:"..sets[1]]
+	end
+end
+
 function BulkMail:SendCacheBuild(destination)
 	if not self.cacheLock then
 		self:SendCacheCleanUp(true)
 		self:DestCacheBuild()
+		self:PTSetsCacheBuild()
 		if destination ~= '' and not self.destCache[destination] then return end -- no need to check for an item in the autosend list if the destination string doesn't have any
 		for bag, v in pairs(self.containerFrames) do
 			for slot, w in pairs(v) do
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-					local dest = self.db.realm.autoSendListItems[itemID]
+					local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
 					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == string.lower(destination)) then
 						self:SendCacheAdd(bag, slot)
 					end
@@ -305,12 +332,12 @@ function BulkMail:ListAutoSendItems()
 end
 
 function BulkMail:AddAutoSendItem(...)
-	if string.find(arg[1], "^|[cC]") then	--first arg is an item, not a name
+	if string.find(arg[1], "^|[cC]" or "^pt:") then	--first arg is an item or PT set, not a name
 		table.insert(arg, 1, self.db.realm.defaultDestination)
 	end
 
 	for i = 2, table.getn(arg) do
-		local itemID = select(3, string.find(arg[i], "item:(%d+)"))
+		local itemID = select(3, string.find(arg[i], "item:(%d+)" or "(pt:%w+)"))
 		if itemID then
 			self.db.realm.autoSendListItems[tostring(itemID)] = arg[1]
 			self:Print("%s - %s", arg[i], arg[1])
@@ -319,11 +346,11 @@ function BulkMail:AddAutoSendItem(...)
 end
 
 function BulkMail:RemoveAutoSendItem(arglist)
-	for itemID in string.gfind(arglist, "item:(%d+)") do
+	for itemID in string.gfind(arglist, "item:(%d+)" or "(pt:%w+)") do
 		if self.db.realm.autoSendListItems[itemID] then
 			self.db.realm.autoSendListItems[itemID] = nil
 		else
-			self:Print(L"This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
+			self:Print(L"This item or set is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
 		end
 	end
 end
@@ -360,7 +387,12 @@ end
 function BulkMail:Send()
 	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
-		SendMailNameEditBox:SetText(self.pmsqDestination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.realm.defaultDestination or '')
+		local itemDest
+		if not self.pmsqDestination then
+			local packageID = SendMailPackageButton:GetID()
+			itemDest = self.db.realm.autoSendListItems[tostring(packageID)] or self:GetPTSendDest(packageID)
+		end
+		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.realm.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
 			SendMailFrame_SendMail()
 		elseif not self.db.realm.defaultDestination then

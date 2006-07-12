@@ -1,3 +1,9 @@
+0.7.1:
+- PeriodicTable support added for AutoSend in rudimentary form.
+	+ Example Usage (queueing all herbs for sending to Herbmuleski whenever you're at the mailbox):
+		/bm autosend add Herbmuleski pt:gatherskillherbalism
+- AceLocale-2.0 locals format update
+
 0.7.0:
 - Ace2 upgradinations.
 - Recommended you do a fresh checkout, as some library paths have changed.

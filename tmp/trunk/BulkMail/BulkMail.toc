@@ -18,8 +18,13 @@ lib\Ace2\AceDB\AceDB-2.0.lua
 lib\Ace2\AceDebug\AceDebug-2.0.lua
 lib\Ace2\AceLocale\AceLocale-2.0.lua
 lib\Compost\Compost-2.0.lua
+lib\Dewdrop\Dewdrop-2.0.lua
 lib\Gratuity\Gratuity-2.0.lua
 lib\Metrognome\Metrognome-2.0.lua
+lib\PeriodicTable\PTCore\PTEmbed.lua
+lib\PeriodicTable\PTElTrade\PTEmbedElemTradeSkill.lua
+lib\PeriodicTable\PTElFood\PTEmbedElemFood.lua
+lib\PeriodicTable\PTElMisc\PTEmbedElemMisc.lua
 
 BulkMail-enUS.lua
 BulkMailUtil.lua
