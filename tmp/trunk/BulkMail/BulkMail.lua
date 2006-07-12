@@ -51,7 +51,7 @@ function BulkMail:OnInitialize()
 						input = true,
 						set   = "AddAutoSendItem",
 						get   = false,
-						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]" or "^pt:") end,
+						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]") or not string.find(name, "^pt:") end,
 						error = L"Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r.",
 						usage = "[destination] <item> [item2 item3 ...]",
 					},
@@ -332,12 +332,12 @@ function BulkMail:ListAutoSendItems()
 end
 
 function BulkMail:AddAutoSendItem(...)
-	if string.find(arg[1], "^|[cC]" or "^pt:") then	--first arg is an item or PT set, not a name
+	if string.find(arg[1], "^|[cC]") or string.find(arg[1], "^pt:") then	--first arg is an item or PT set, not a name
 		table.insert(arg, 1, self.db.realm.defaultDestination)
 	end
 
 	for i = 2, table.getn(arg) do
-		local itemID = select(3, string.find(arg[i], "item:(%d+)" or "(pt:%w+)"))
+		local itemID = select(3, string.find(arg[i], "item:(%d+)")) or select(3, string.find(arg[i], "(pt:%w+)"))
 		if itemID then
 			self.db.realm.autoSendListItems[tostring(itemID)] = arg[1]
 			self:Print("%s - %s", arg[i], arg[1])
@@ -346,11 +346,18 @@ function BulkMail:AddAutoSendItem(...)
 end
 
 function BulkMail:RemoveAutoSendItem(arglist)
-	for itemID in string.gfind(arglist, "item:(%d+)" or "(pt:%w+)") do
+	for itemID in string.gfind(arglist, "item:(%d+)") do
 		if self.db.realm.autoSendListItems[itemID] then
 			self.db.realm.autoSendListItems[itemID] = nil
 		else
-			self:Print(L"This item or set is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
+			self:Print(L"This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
+		end
+	end
+	for set in string.gfind(arglist, "(pt:%w+)") do
+		if self.db.realm.autoSendListItems[set] then
+			self.db.realm.autoSendListItems[set] = nil
+		else
+			self:Print(L"This set is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
 		end
 	end
 end
