@@ -6,8 +6,10 @@
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
-## SavedVariables: BulkMailDB 
+## SavedVariables: BulkMailDB
 ## RequiredDeps: AceGUI
+## OptionalDeps: Ace2, CompostLib, DewDropLib, GratuityLib, Metrognome, PeriodicTable
+
 lib\Ace2\AceLibrary\AceLibrary.lua
 lib\Ace2\AceOO\AceOO-2.0.lua
 lib\Ace2\AceConsole\AceConsole-2.0.lua
