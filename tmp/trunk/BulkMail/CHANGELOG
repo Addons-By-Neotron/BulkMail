@@ -1,3 +1,6 @@
+0.7.2:
+- QuickSending an item no longer locks its container slot
+
 0.7.1:
 - PeriodicTable support added for AutoSend in rudimentary form.
 	+ Example Usage (queueing all herbs for sending to Herbmuleski whenever you're at the mailbox):

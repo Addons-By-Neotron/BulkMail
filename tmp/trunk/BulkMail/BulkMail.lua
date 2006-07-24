@@ -283,7 +283,7 @@ function BulkMail:SendCacheAdd(frame, slot, squelch)
 			self:Print(L"Item cannot be mailed: %s.", GetContainerItemLink(bag, slot))
 		end
 	end
-	self:UpdateSendCost()
+	return self:UpdateSendCost()
 end
 
 function BulkMail:SendCacheRemove(frame, slot)
@@ -319,9 +319,9 @@ function BulkMail:SendCacheToggle(frame, slot)
 	local bag = slot and frame or frame:GetParent():GetID()
 	slot = slot or frame:GetID()
 	if self:SendCachePos(bag, slot) then
-		self:SendCacheRemove(bag, slot)
+		return self:SendCacheRemove(bag, slot)
 	else
-		self:SendCacheAdd(bag, slot)
+		return self:SendCacheAdd(bag, slot)
 	end
 end
 
@@ -385,9 +385,9 @@ function BulkMail:UpdateSendCost()
 		if GetSendMailItem() then
 			numMails = numMails + 1
 		end
-		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * numMails)
+		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * numMails)
 	else
-		MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
+		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
 	end
 end
 
@@ -401,22 +401,22 @@ function BulkMail:Send()
 		end
 		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.realm.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
-			SendMailFrame_SendMail()
+			return self.hooks[SendMailMailButton].OnClick.orig()
 		elseif not self.db.realm.defaultDestination then
 			self:Print(L"No default destination set.")
 			self:Print(L"Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.")
 			self.cacheLock = false
-			metro:Stop("BMSend")
+			return metro:Stop("BMSend")
 		end
 	elseif cache then
 		local bag, slot = unpack(cache)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
 		SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or '', "item:(%d+):")) or 0)
-		self:SendCacheRemove(bag, slot)
+		return self:SendCacheRemove(bag, slot)
 	else
 		metro:Stop("BMSend")
-		self:SendCacheCleanUp()
+		return self:SendCacheCleanUp()
 	end
 end
 
@@ -429,7 +429,8 @@ function BulkMail:QuickSend(frame, slot, destination)
 		if GetSendMailItem() then
 			SendMailNameEditBox:SetText(destination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.realm.defaultDestination or '')
 			if SendMailNameEditBox:GetText() ~= '' then
-				SendMailFrame_SendMail()
+				this = SendMailMailButton
+				return self.hooks[SendMailMailButton].OnClick.orig()
 			elseif not self.db.realm.defaultDestination then
 				self:Print(L"No default destination set.")
 				self:Print(L"Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.")
@@ -441,5 +442,5 @@ function BulkMail:QuickSend(frame, slot, destination)
 end
 
 function BulkMail:ShowGUI()
-	BulkMail.gui:Show()
+	return BulkMail.gui:Show()
 end
