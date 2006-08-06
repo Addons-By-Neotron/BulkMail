@@ -169,6 +169,7 @@ function BulkMail:SendMailMailButton_OnClick()
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
 		metro:Start("BMSend")
 	else
+		this = SendMailMailButton
 		return self.hooks[SendMailMailButton].OnClick.orig()
 	end
 end
@@ -401,6 +402,7 @@ function BulkMail:Send()
 		end
 		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.realm.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
+			this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick.orig()
 		elseif not self.db.realm.defaultDestination then
 			self:Print(L"No default destination set.")
