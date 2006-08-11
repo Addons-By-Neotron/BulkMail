@@ -100,10 +100,11 @@ function BulkMail:OnInitialize()
 	self.sendCache       = compost:Acquire()
 	self.ptSetsCache     = compost:Acquire()
 end
-
+eventTest = {}
 function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
+	AceLibrary("AceEvent-2.0"):RegisterAllEvents(function() table.insert(eventTest, GetTime().." "..event) end)
 end
 
 function BulkMail:MAIL_SHOW()
@@ -207,7 +208,7 @@ end
 function BulkMail:DestCacheBuild()
 	self.destCache = compost:Erase(self.destCache)
 	for _, dest in pairs(self.db.realm.autoSendListItems) do
-		self.destCache[dest] = 1
+		self.destCache[string.lower(dest)] = 1
 	end
 end
 
@@ -228,6 +229,7 @@ function BulkMail:GetPTSendDest(itemID)
 end
 
 function BulkMail:SendCacheBuild(destination)
+	destination = string.lower(destination)
 	if not self.cacheLock then
 		self:SendCacheCleanUp(true)
 		self:DestCacheBuild()
@@ -238,7 +240,7 @@ function BulkMail:SendCacheBuild(destination)
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
 					local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
-					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == string.lower(destination)) then
+					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == destination) then
 						self:SendCacheAdd(bag, slot)
 					end
 				end
