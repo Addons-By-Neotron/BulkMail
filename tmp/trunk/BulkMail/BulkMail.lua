@@ -100,18 +100,15 @@ function BulkMail:OnInitialize()
 	self.sendCache       = compost:Acquire()
 	self.ptSetsCache     = compost:Acquire()
 end
-eventTest = {}
+
 function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
-	AceLibrary("AceEvent-2.0"):RegisterAllEvents(function() table.insert(eventTest, GetTime().." "..event) end)
 end
 
 function BulkMail:MAIL_SHOW()
-	if not Bagnon then
-		OpenAllBags()
-		OpenAllBags()
-	end
+	OpenAllBags()
+	OpenAllBags()
 	self:InitializeContainerFrames()
 	self:DestCacheBuild()
 	self:Hook("ContainerFrameItemButton_OnClick")
