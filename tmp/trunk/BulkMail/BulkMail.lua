@@ -237,7 +237,8 @@ function BulkMail:SendCacheBuild(destination)
 				for _, f in pairs(w) do
 					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
 					local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
-					if dest and dest ~= UnitName('player') and (destination == "" or string.lower(dest) == destination) then
+					dest = string.lower(dest)
+					if dest and dest ~= string.lower(UnitName('player')) and (destination == "" or dest == destination) then
 						self:SendCacheAdd(bag, slot)
 					end
 				end
