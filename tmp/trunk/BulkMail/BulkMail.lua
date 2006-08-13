@@ -179,7 +179,7 @@ function BulkMail:MailFrameTab2_OnClick()
 end
 
 function BulkMail:SendMailNameEditBox_OnTextChanged()
-	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
+	BulkMail:SendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
 	return self.hooks[SendMailNameEditBox].OnTextChanged.orig()
 end
 
@@ -205,7 +205,7 @@ end
 function BulkMail:DestCacheBuild()
 	self.destCache = compost:Erase(self.destCache)
 	for _, dest in pairs(self.db.realm.autoSendListItems) do
-		self.destCache[string.lower(dest)] = 1
+		self.destCache[string.lower(dest)] = true
 	end
 end
 
@@ -226,20 +226,20 @@ function BulkMail:GetPTSendDest(itemID)
 end
 
 function BulkMail:SendCacheBuild(destination)
-	destination = string.lower(destination)
 	if not self.cacheLock then
 		self:SendCacheCleanUp(true)
 		self:DestCacheBuild()
 		self:PTSetsCacheBuild()
-		if destination ~= '' and not self.destCache[destination] then return end -- no need to check for an item in the autosend list if the destination string doesn't have any
-		for bag, v in pairs(self.containerFrames) do
-			for slot, w in pairs(v) do
-				for _, f in pairs(w) do
-					local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-					local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
-					dest = dest and string.lower(dest)
-					if dest and dest ~= string.lower(UnitName('player')) and (destination == "" or dest == destination) then
-						self:SendCacheAdd(bag, slot)
+		if destination == '' or self.destCache[destination] then -- no need to check for an item in the autosend list if the destination string doesn't have any
+			for bag, v in pairs(self.containerFrames) do
+				for slot, w in pairs(v) do
+					for _, f in pairs(w) do
+						local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
+						local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
+						dest = dest and string.lower(dest)
+						if dest and dest ~= string.lower(UnitName('player')) and (destination == "" or dest == destination) then
+							self:SendCacheAdd(bag, slot)
+						end
 					end
 				end
 			end
