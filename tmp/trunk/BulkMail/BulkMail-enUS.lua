@@ -1,4 +1,4 @@
-local L = AceLibrary("AceLocale-2.0"):new("BulkMail")
+local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
 
 L:RegisterTranslations("enUS", function()
 	return {

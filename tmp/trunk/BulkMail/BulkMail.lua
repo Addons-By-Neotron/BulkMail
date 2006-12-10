@@ -1,19 +1,24 @@
+local function BuildItemLink(c,i,n)
+	if(((c or "")=="") or ((i or "")=="") or ((n or "")=="")) then return "" end
+	if(strlen(c)<8) then c="ff"..strlower(c) end
+	return format("|c%s|Hitem:%s|h[%s]|h|r",c,i,n)
+end
+
 local function GetItemLink(item)
 	local name, _, rarity = GetItemInfo(item)
 	if name and rarity then
 		local color = string.sub(select(4, GetItemQualityColor(rarity)), 3)
-		return ace.BuildItemLink(color, item, name) or name
+		return BuildItemLink(color, item, name) or name
 	else
 		return item
 	end
 end
 
-BulkMail = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "AceHook-2.0", "AceConsole-2.0")
+BulkMail = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "AceHook-2.1", "AceConsole-2.0")
 
-local L = AceLibrary("AceLocale-2.0"):new("BulkMail")
+local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
 BulkMail.L = L
 
-local compost  = AceLibrary("Compost-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
 local metro    = AceLibrary("Metrognome-2.0")
 local pt       = PeriodicTableEmbed:GetInstance("1")
@@ -52,7 +57,7 @@ function BulkMail:OnInitialize()
 						set   = "AddAutoSendItem",
 						get   = false,
 						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]") or not string.find(name, "^pt:") end,
-						error = L"Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r.",
+						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
 						usage = "[destination] <item> [item2 item3 ...]",
 					},
 					rm = {
@@ -95,10 +100,10 @@ function BulkMail:OnInitialize()
 
 	metro:Register("BMSend", self.Send, 0.1, self)
 	
-	self.containerFrames = compost:Acquire()
-	self.destCache       = compost:Acquire()
-	self.sendCache       = compost:Acquire()
-	self.ptSetsCache     = compost:Acquire()
+	self.containerFrames = {}
+	self.destCache       = {}
+	self.sendCache       = {}
+	self.ptSetsCache     = {}
 end
 
 function BulkMail:OnEnable()
@@ -111,8 +116,8 @@ function BulkMail:MAIL_SHOW()
 	OpenAllBags()
 	self:InitializeContainerFrames()
 	self:DestCacheBuild()
-	self:Hook("ContainerFrameItemButton_OnClick")
-	self:Hook("SendMailFrame_CanSend")
+	self:SecureHook("ContainerFrameItemButton_OnClick")
+	self:SecureHook("SendMailFrame_CanSend")
 	self:HookScript(SendMailMailButton, "OnClick", "SendMailMailButton_OnClick")
 	self:HookScript(MailFrameTab2, "OnClick", "MailFrameTab2_OnClick")
 	self:HookScript(SendMailNameEditBox, "OnTextChanged", "SendMailNameEditBox_OnTextChanged")
@@ -136,18 +141,16 @@ end
 -----------------------------------------------------------------------------------]]
 function BulkMail:ContainerFrameItemButton_OnClick(button, ignoreModifiers)
 	if IsControlKeyDown() and IsShiftKeyDown() then
-		return self:QuickSend(this)
+		self:QuickSend(this)
 	end
 	if IsAltKeyDown() then
 		self:SendCacheToggle(this)
 	else
 		self:SendCacheRemove(this)
-		return self.hooks.ContainerFrameItemButton_OnClick.orig(button, ignoreModifiers)
 	end
 end
 
 function BulkMail:SendMailFrame_CanSend()
-	self.hooks.SendMailFrame_CanSend.orig()
 	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
@@ -158,7 +161,7 @@ function BulkMail:SendMailFrame_CanSend()
 	end
 end
 
-function BulkMail:SendMailMailButton_OnClick()
+function BulkMail:SendMailMailButton_OnClick(frame, a1)
 	self.cacheLock = true
 	self.pmsqDestination = SendMailNameEditBox:GetText()
 	if SendMailNameEditBox:GetText() == '' then
@@ -168,19 +171,19 @@ function BulkMail:SendMailMailButton_OnClick()
 		metro:Start("BMSend")
 	else
 		this = SendMailMailButton
-		return self.hooks[SendMailMailButton].OnClick.orig()
+		return self.hooks[frame].OnClick(a1)
 	end
 end
 
-function BulkMail:MailFrameTab2_OnClick()
+function BulkMail:MailFrameTab2_OnClick(frame, a1)
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
 	BulkMail.gui:Show()
-	return self.hooks[MailFrameTab2].OnClick.orig()
+	return self.hooks[frame].OnClick(a1)
 end
 
-function BulkMail:SendMailNameEditBox_OnTextChanged()
+function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
 	BulkMail:SendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
-	return self.hooks[SendMailNameEditBox].OnTextChanged.orig()
+	return self.hooks[frame].OnTextChanged(a1)
 end
 
 --[[--------------------------------------------------------------------------------
@@ -190,12 +193,12 @@ end
 function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a table consisting of all frames which are container buttons
 	local enum = EnumerateFrames
 	local f = enum()
-	self.containerFrames = compost:Erase(self.containerFrames)
+	self.containerFrames = {}
 	while f do
 		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
 		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
-			self.containerFrames[bag] = self.containerFrames[bag] or compost:Acquire()
-			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or compost:Acquire()
+			self.containerFrames[bag] = self.containerFrames[bag] or {}
+			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
 			table.insert(self.containerFrames[bag][slot], f)
 		end
 		f = enum(f)
@@ -203,14 +206,14 @@ function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a 
 end
 
 function BulkMail:DestCacheBuild()
-	self.destCache = compost:Erase(self.destCache)
+	self.destCache = {}
 	for _, dest in pairs(self.db.realm.autoSendListItems) do
 		self.destCache[string.lower(dest)] = true
 	end
 end
 
 function BulkMail:PTSetsCacheBuild()
-	self.ptSetsCache = compost:Erase(self.ptSetsCache)
+	self.ptSetsCache = {}
 	for set in pairs(self.db.realm.autoSendListItems) do
 		if string.find(set, "^pt:") then
 			table.insert(self.ptSetsCache, select(3, string.find(set, "pt:(%w+)")))
@@ -265,7 +268,7 @@ function BulkMail:SendCacheAdd(frame, slot, squelch)
 	local bag = slot and frame or frame:GetParent():GetID()
 	slot = slot or frame:GetID()
 	if not self.sendCache then
-		self.sendCache = compost:Acquire()
+		self.sendCache = {}
 	end
 	if not self.containerFrames then
 		InitializeContainerFrames()
@@ -281,7 +284,7 @@ function BulkMail:SendCacheAdd(frame, slot, squelch)
 			BulkMail.gui.Items:Update()
 			SendMailFrame_CanSend()
 		elseif not squelch then
-			self:Print(L"Item cannot be mailed: %s.", GetContainerItemLink(bag, slot))
+			self:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
 		end
 	end
 	return self:UpdateSendCost()
@@ -293,7 +296,6 @@ function BulkMail:SendCacheRemove(frame, slot)
 	local i = BulkMail:SendCachePos(bag, slot)
 	if i then
 		self.sendCache[i] = nil
-		table.setn(self.sendCache, table.getn(self.sendCache) - 1)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
@@ -333,6 +335,7 @@ function BulkMail:ListAutoSendItems()
 end
 
 function BulkMail:AddAutoSendItem(...)
+	local arg = {...}
 	if string.find(arg[1], "^|[cC]") or string.find(arg[1], "^pt:") then	--first arg is an item or PT set, not a name
 		table.insert(arg, 1, self.db.realm.defaultDestination)
 	end
@@ -351,14 +354,14 @@ function BulkMail:RemoveAutoSendItem(arglist)
 		if self.db.realm.autoSendListItems[itemID] then
 			self.db.realm.autoSendListItems[itemID] = nil
 		else
-			self:Print(L"This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
+			self:Print(L["This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it."])
 		end
 	end
 	for set in string.gfind(arglist, "(pt:%w+)") do
 		if self.db.realm.autoSendListItems[set] then
 			self.db.realm.autoSendListItems[set] = nil
 		else
-			self:Print(L"This set is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it.")
+			self:Print(L["This set is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it."])
 		end
 	end
 end
@@ -375,7 +378,7 @@ function BulkMail:ClearAutoSendList(confirm)
 	if string.lower(confirm) == "confirm" then
 		self.db.realm.autoSendListItems = {}
 	else
-		self:Print(L"You must type 'confirm' to clear")
+		self:Print(L["You must type 'confirm' to clear"])
 	end
 end
 
@@ -403,10 +406,10 @@ function BulkMail:Send()
 		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.realm.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
 			this = SendMailMailButton
-			return self.hooks[SendMailMailButton].OnClick.orig()
+			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.realm.defaultDestination then
-			self:Print(L"No default destination set.")
-			self:Print(L"Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.")
+			self:Print(L["No default destination set."])
+			self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 			self.cacheLock = false
 			return metro:Stop("BMSend")
 		end
@@ -432,14 +435,14 @@ function BulkMail:QuickSend(frame, slot, destination)
 			SendMailNameEditBox:SetText(destination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.realm.defaultDestination or '')
 			if SendMailNameEditBox:GetText() ~= '' then
 				this = SendMailMailButton
-				return self.hooks[SendMailMailButton].OnClick.orig()
+				return self.hooks[SendMailMailButton].OnClick()
 			elseif not self.db.realm.defaultDestination then
-				self:Print(L"No default destination set.")
-				self:Print(L"Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r.")
+				self:Print(L["No default destination set."])
+				self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 			end
 		end
 	else
-		self:Print(L"Cannot determine the item clicked.")
+		self:Print(L["Cannot determine the item clicked."])
 	end
 end
 

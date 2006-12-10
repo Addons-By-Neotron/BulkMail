@@ -1,4 +1,4 @@
-## Interface: 11100
+## Interface: 20000
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made easy
 ## Version: 0.7.2
