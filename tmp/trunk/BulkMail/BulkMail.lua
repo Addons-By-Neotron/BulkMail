@@ -116,7 +116,7 @@ function BulkMail:MAIL_SHOW()
 	OpenAllBags()
 	self:InitializeContainerFrames()
 	self:DestCacheBuild()
-	self:SecureHook("ContainerFrameItemButton_OnClick")
+	self:SecureHook("ContainerFrameItemButton_OnModifiedClick")
 	self:SecureHook("SendMailFrame_CanSend")
 	self:HookScript(SendMailMailButton, "OnClick", "SendMailMailButton_OnClick")
 	self:HookScript(MailFrameTab2, "OnClick", "MailFrameTab2_OnClick")
@@ -139,7 +139,7 @@ end
 --[[--------------------------------------------------------------------------------
   Hooks
 -----------------------------------------------------------------------------------]]
-function BulkMail:ContainerFrameItemButton_OnClick(button, ignoreModifiers)
+function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
 	if IsControlKeyDown() and IsShiftKeyDown() then
 		self:QuickSend(this)
 	end
@@ -350,14 +350,14 @@ function BulkMail:AddAutoSendItem(...)
 end
 
 function BulkMail:RemoveAutoSendItem(arglist)
-	for itemID in string.gfind(arglist, "item:(%d+)") do
+	for itemID in string.gmatch(arglist, "item:(%d+)") do
 		if self.db.realm.autoSendListItems[itemID] then
 			self.db.realm.autoSendListItems[itemID] = nil
 		else
 			self:Print(L["This item is not currently in your autosend list.  Please use |cff00ffaa/bulkmail autosend add [destination] ITEMLINK [ITEMLINK2, ...]|r to add it."])
 		end
 	end
-	for set in string.gfind(arglist, "(pt:%w+)") do
+	for set in string.gmatch(arglist, "(pt:%w+)") do
 		if self.db.realm.autoSendListItems[set] then
 			self.db.realm.autoSendListItems[set] = nil
 		else
