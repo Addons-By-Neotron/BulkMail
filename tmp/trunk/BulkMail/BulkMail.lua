@@ -455,11 +455,13 @@ function BulkMail:ShowGUI()
 				if #self.sendCache > 0 then
 					for i, v in pairs(self.sendCache) do
 						local link = GetContainerItemLink(v[1], v[2])
-						local qty = select(2, GetContainerItemInfo(v[1], v[2]))
+						local texture, qty = GetContainerItemInfo(v[1], v[2])
 						local itemText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
 						itemText = qty > 1 and itemText .. " (" .. qty .. ")" or itemText
 						
-						cat:AddLine('text', itemText, 'func', self.OnItemSelect, 'arg1', self, 'arg2', v[1], 'arg3', v[2])
+						cat:AddLine('text', itemText,
+							'checked', true, 'hasCheck', true, 'checkIcon', texture,
+							'func', self.OnItemSelect, 'arg1', self, 'arg2', v[1], 'arg3', v[2])
 					end
 				else
 					cat:AddLine('text', L["No items selected"])
