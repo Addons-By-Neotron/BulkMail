@@ -19,12 +19,16 @@ BulkMail = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "AceHook-
 local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
 BulkMail.L = L
 
+local tablet   = AceLibrary("Tablet-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
 local metro    = AceLibrary("Metrognome-2.0")
 local pt       = PeriodicTableEmbed:GetInstance("1")
 
 function BulkMail:OnInitialize()
 	self:RegisterDB("BulkMailDB")
+	self:RegisterDefaults('profile', {
+		tablet_data = {detached=true, },
+	})
 	self:RegisterDefaults('realm', {
 		autoSendListItems = {},
 	})
@@ -86,18 +90,13 @@ function BulkMail:OnInitialize()
 						error = "You must type 'CONFIRM' to clear.",
 						usage = "CONFIRM",
 					},
-				},				
+				},
 			},
 		},
 	}
 	
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, args)
-	self.dewdrop = AceLibrary("Dewdrop-2.0")
-	self.dewdrop:Register(BulkMail_GUIFrame,
-			'children', args,
-			'dontHook', true
-		)
-
+	
 	metro:Register("BMSend", self.Send, 0.1, self)
 	
 	self.containerFrames = {}
@@ -133,7 +132,7 @@ function BulkMail:MAIL_CLOSED()
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
 	end
-	BulkMail.gui:Hide()
+	BulkMail:HideGUI()
 end
 
 --[[--------------------------------------------------------------------------------
@@ -154,11 +153,7 @@ function BulkMail:SendMailFrame_CanSend()
 	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
-	if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
-		self.gui.Send:Enable()
-	else
-		self.gui.Send:Disable()
-	end
+	self:RefreshGUI()
 end
 
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
@@ -176,8 +171,8 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
+	BulkMail:ShowGUI()
 	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
-	BulkMail.gui:Show()
 	return self.hooks[frame].OnClick(a1)
 end
 
@@ -248,8 +243,7 @@ function BulkMail:SendCacheBuild(destination)
 			end
 		end
 	end
-	BulkMail.gui.Items:ClearList()
-	BulkMail.gui.Items:Update()
+	self:RefreshGUI()
 end
 
 function BulkMail:SendCachePos(frame, slot)
@@ -280,8 +274,7 @@ function BulkMail:SendCacheAdd(frame, slot, squelch)
 			for _, f in pairs(self.containerFrames[bag][slot]) do
 				if f.SetButtonState then f:SetButtonState("PUSHED", 1) end
 			end
-			BulkMail.gui.Items:ClearList()
-			BulkMail.gui.Items:Update()
+			self:RefreshGUI()
 			SendMailFrame_CanSend()
 		elseif not squelch then
 			self:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
@@ -299,8 +292,7 @@ function BulkMail:SendCacheRemove(frame, slot)
 		for _, f in pairs(self.containerFrames[bag][slot]) do
 			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
 		end
-		BulkMail.gui.Items:ClearList()
-		BulkMail.gui.Items:Update()
+		self:RefreshGUI()
 		self:UpdateSendCost()
 		SendMailFrame_CanSend()
 	end
@@ -340,7 +332,7 @@ function BulkMail:AddAutoSendItem(...)
 		table.insert(arg, 1, self.db.realm.defaultDestination)
 	end
 
-	for i = 2, table.getn(arg) do
+	for i = 2, #arg do
 		local itemID = select(3, string.find(arg[i], "item:(%d+)")) or select(3, string.find(arg[i], "(pt:%w+)"))
 		if itemID then
 			self.db.realm.autoSendListItems[tostring(itemID)] = arg[1]
@@ -384,8 +376,8 @@ end
 
 
 function BulkMail:UpdateSendCost()
-	if self.sendCache and table.getn(self.sendCache) > 0 then
-		local numMails = table.getn(self.sendCache)
+	if self.sendCache and #self.sendCache > 0 then
+		local numMails = #self.sendCache
 		if GetSendMailItem() then
 			numMails = numMails + 1
 		end
@@ -446,6 +438,99 @@ function BulkMail:QuickSend(frame, slot, destination)
 	end
 end
 
+--[[--------------------------------------------------------------------------------
+  GUI
+-----------------------------------------------------------------------------------]]
+
 function BulkMail:ShowGUI()
-	return BulkMail.gui:Show()
+	if not tablet:IsRegistered('BulkMail') then
+		tablet:Register('BulkMail', 'detachedData', self.db.profile.tablet_data,
+			'dontHook', true, 'showTitleWhenDetached', true,-- 'minWidth', 350,
+			'children', function()
+				tablet:SetTitle("BulkMail")
+				
+				local cat = tablet:AddCategory('columns', 1, 'text', L["Items to be sent (Alt-Click to add/remove):"],
+					'showWithoutChildren', true, 'child_indentation', 5)
+				
+				if #self.sendCache > 0 then
+					for i, v in pairs(self.sendCache) do
+						local link = GetContainerItemLink(v[1], v[2])
+						local qty = select(2, GetContainerItemInfo(v[1], v[2]))
+						local itemText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
+						itemText = qty > 1 and itemText .. " (" .. qty .. ")" or itemText
+						
+						cat:AddLine('text', itemText, 'func', self.OnItemSelect, 'arg1', self, 'arg2', v[1], 'arg3', v[2])
+					end
+				else
+					cat:AddLine('text', L["No items selected"])
+				end
+				
+				cat = tablet:AddCategory('columns', 1)
+				cat:AddLine('text', L["Drop items here for Sending"], 'justify', 'CENTER', 'func', self.OnDropClick, 'arg1', self)
+				
+				if #self.sendCache > 0 then
+					cat = tablet:AddCategory('columns', 1)
+					cat:AddLine('text', L["Clear"], 'func', self.SendCacheCleanUp, 'arg1', self)
+					if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
+						cat:AddLine('text', L["Send"], 'func', self.OnSendClick, 'arg1', self)
+					else
+						cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
+					end
+				else
+					cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
+					cat:AddLine('text', L["Clear"])
+					cat:AddLine('text', L["Send"])
+				end
+			end)
+	end
+	tablet:Open('BulkMail')
+end
+
+function BulkMail:HideGUI()
+	tablet:Close('BulkMail')
+end
+
+function BulkMail:RefreshGUI()
+	tablet:Refresh('BulkMail')
+end
+
+function BulkMail:OnItemSelect(bag, slot)
+	if bag and slot and arg1 == "LeftButton" then
+		if IsAltKeyDown() then
+			BulkMail:SendCacheToggle(bag, slot)
+		elseif IsShiftKeyDown() and ChatFrameEditBox:IsVisible() then
+			ChatFrameEditBox:Insert(GetContainerItemLink(bag, slot))
+		elseif IsControlKeyDown() then
+			DressUpItemLink(GetContainerItemLink(bag, slot))
+		else
+			SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)")), GetContainerItemLink(bag, slot), arg1)
+		end
+	end
+end
+
+function BulkMail:OnSendClick()
+	if not self.sendCache then return end
+	self:SendMailMailButton_OnClick()
+end
+
+local function GetLockedContainerItem()
+	for bag=0, NUM_BAG_SLOTS do
+		for slot=1, GetContainerNumSlots(bag) do
+			if select(3, GetContainerItemInfo(bag, slot)) then
+				return bag, slot
+			end
+		end
+	end
+end
+
+function BulkMail:OnDropClick()
+	if GetSendMailItem() then
+		self:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
+	end
+	if CursorHasItem() and GetLockedContainerItem() then
+		self:SendCacheAdd(GetLockedContainerItem())
+		--To clear the cursor.
+		PickupContainerItem(GetLockedContainerItem())
+	end
+	self:RefreshGUI()
 end

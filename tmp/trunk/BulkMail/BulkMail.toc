@@ -1,14 +1,13 @@
-## Interface: 20000
+## Interface: 20003
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made easy
 ## Version: 0.7.2
-## Author: hyperactiveChipmunk
+## Author: hyperactiveChipmunk, Kemayo
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
 ## SavedVariables: BulkMailDB
-## RequiredDeps: AceGUI
-## OptionalDeps: Ace2, CompostLib, DewDropLib, GratuityLib, Metrognome, PeriodicTable
+## OptionalDeps: Ace2, GratuityLib, Metrognome, PeriodicTable, TabletLib
 
 lib\Ace2\AceLibrary\AceLibrary.lua
 lib\Ace2\AceOO\AceOO-2.0.lua
@@ -20,17 +19,13 @@ lib\Ace2\AceTab\AceTab-2.0.lua
 lib\Ace2\AceConsole\AceConsole-2.0.lua
 lib\Ace2\AceDebug\AceDebug-2.0.lua
 lib\Ace2\AceLocale\AceLocale-2.0.lua
-lib\Compost\Compost-2.0.lua
-lib\Dewdrop\Dewdrop-2.0.lua
 lib\Gratuity\Gratuity-2.0.lua
 lib\Metrognome\Metrognome-2.0.lua
+lib\Tablet\Tablet-2.0.lua
 lib\PeriodicTable\PTCore\PTEmbed.lua
 lib\PeriodicTable\PTElTrade\PTEmbedElemTradeSkill.lua
 lib\PeriodicTable\PTElFood\PTEmbedElemFood.lua
 lib\PeriodicTable\PTElMisc\PTEmbedElemMisc.lua
 
 BulkMail-enUS.lua
-BulkMailUtil.lua
 BulkMail.lua
-gui.xml
-gui.lua
