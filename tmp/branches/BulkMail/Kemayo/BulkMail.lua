@@ -461,7 +461,14 @@ function BulkMail:ShowGUI()
 						
 						cat:AddLine('text', itemText, 'func', self.OnItemSelect, 'arg1', self, 'arg2', v[1], 'arg3', v[2])
 					end
-					
+				else
+					cat:AddLine('text', L["No items selected"])
+				end
+				
+				cat = tablet:AddCategory('columns', 1)
+				cat:AddLine('text', L["Drop items here for Sending"], 'justify', 'CENTER', 'func', self.OnDropClick, 'arg1', self)
+				
+				if #self.sendCache > 0 then
 					cat = tablet:AddCategory('columns', 1)
 					cat:AddLine('text', L["Clear"], 'func', self.SendCacheCleanUp, 'arg1', self)
 					if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
@@ -470,8 +477,6 @@ function BulkMail:ShowGUI()
 						cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
 					end
 				else
-					cat:AddLine('text', L["No items selected"])
-					
 					cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
 					cat:AddLine('text', L["Clear"])
 					cat:AddLine('text', L["Send"])
@@ -506,4 +511,26 @@ end
 function BulkMail:OnSendClick()
 	if not self.sendCache then return end
 	self:SendMailMailButton_OnClick()
+end
+
+local function GetLockedContainerItem()
+	for bag=0, NUM_BAG_SLOTS do
+		for slot=1, GetContainerNumSlots(bag) do
+			if select(3, GetContainerItemInfo(bag, slot)) then
+				return bag, slot
+			end
+		end
+	end
+end
+
+function BulkMail:OnDropClick()
+	if GetSendMailItem() then
+		self:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
+	end
+	if CursorHasItem() and GetLockedContainerItem() then
+		self:SendCacheAdd(GetLockedContainerItem())
+		--To clear the cursor.
+		PickupContainerItem(GetLockedContainerItem())
+	end
+	self:RefreshGUI()
 end
