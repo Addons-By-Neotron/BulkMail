@@ -489,7 +489,9 @@ function BulkMail:ShowGUI()
 end
 
 function BulkMail:HideGUI()
-	tablet:Close('BulkMail')
+	if tablet:IsRegistered('BulkMail')
+		tablet:Close('BulkMail')
+	end
 end
 
 function BulkMail:RefreshGUI()
