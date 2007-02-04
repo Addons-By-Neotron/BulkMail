@@ -489,13 +489,15 @@ function BulkMail:ShowGUI()
 end
 
 function BulkMail:HideGUI()
-	if tablet:IsRegistered('BulkMail')
+	if tablet:IsRegistered('BulkMail') then
 		tablet:Close('BulkMail')
 	end
 end
 
 function BulkMail:RefreshGUI()
-	tablet:Refresh('BulkMail')
+	if tablet:IsRegistered('BulkMail') then
+		tablet:Refresh('BulkMail')
+	end
 end
 
 function BulkMail:OnItemSelect(bag, slot)
