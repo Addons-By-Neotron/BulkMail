@@ -13,7 +13,7 @@ lib\Ace2\AceLibrary\AceLibrary.lua
 lib\Ace2\AceOO\AceOO-2.0.lua
 lib\Ace2\AceEvent\AceEvent-2.0.lua
 lib\Ace2\AceAddon\AceAddon-2.0.lua
-lib\Ace2\AceHook\AceHook-2.0.lua
+lib\Ace2\AceHook\AceHook-2.1.lua
 lib\Ace2\AceDB\AceDB-2.0.lua
 lib\Ace2\AceTab\AceTab-2.0.lua
 lib\Ace2\AceConsole\AceConsole-2.0.lua
