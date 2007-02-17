@@ -15,7 +15,8 @@ This is an AddOn to facilitate mailing multiple items to one or more recipients.
   + Alt-Click or drag an item into the GUI dropbox to add it to the send queue
   + If To: field is blank, the items that aren't part of your AutoSend list will be sent to the default destination when you press Send (items from the AutoSend list will go to their appropriate destinations)
   + If the To: field has a name in it, items added will be sent to that destination
-  
+  + QuickSend: Ctrl-Shift-Click on an item in your inventory will send that item to your default/entered destination immediately.  You can even do this from the inbox frame!
+
 Example usage:
 You are Umpahpahpowcow, a misguided Tauren hunter that was lured to Goblin Engineering at a young age.  Now level 60, with many months of raiding under your belt, a bank full of resist gear, and bullets, quest pieces, and holiday minipets up the yim-yam, you frequently rely on an army of level one Orc mules to handle the raw materials, gidgets, and gadgets used to construct your Engineering Masterpieces of Mayhem.
 
