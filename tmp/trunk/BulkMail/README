@@ -4,8 +4,6 @@ BulkMail Usage Instructions
 Author: hyperactiveChipmunk (hyperactiveChipmunk@gmail.com)
 Website: hyperactiveChipmunk.wowinterface.com
 
-Required Dependencies: Ace, AceGUI
-
 This is an AddOn to facilitate mailing multiple items to one or more recipients.  Some features include:
 - AutoSend (/bm autosend for full list of features):
   + Add items to be queued for one-click sending to a given destination every time you're at a mailbox (/bm autosend add [destination] ITEMLINK [ITEMLINK2, ...])
