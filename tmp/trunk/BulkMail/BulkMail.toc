@@ -7,7 +7,7 @@
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
 ## SavedVariables: BulkMailDB
-## OptionalDeps: Ace2, GratuityLib, Metrognome, PeriodicTable, TabletLib
+## OptionalDeps: Ace2, GratuityLib, PeriodicTable, TabletLib
 
 lib\Ace2\AceLibrary\AceLibrary.lua
 lib\Ace2\AceOO\AceOO-2.0.lua
@@ -15,13 +15,12 @@ lib\Ace2\AceEvent\AceEvent-2.0.lua
 lib\Ace2\AceAddon\AceAddon-2.0.lua
 lib\Ace2\AceHook\AceHook-2.1.lua
 lib\Ace2\AceDB\AceDB-2.0.lua
-lib\Ace2\AceTab\AceTab-2.0.lua
 lib\Ace2\AceConsole\AceConsole-2.0.lua
-lib\Ace2\AceDebug\AceDebug-2.0.lua
 lib\Ace2\AceLocale\AceLocale-2.2.lua
+
 lib\Gratuity\Gratuity-2.0.lua
-lib\Metrognome\Metrognome-2.0.lua
 lib\Tablet\Tablet-2.0.lua
+
 lib\PeriodicTable\PTCore\PTEmbed.lua
 lib\PeriodicTable\PTElTrade\PTEmbedElemTradeSkill.lua
 lib\PeriodicTable\PTElFood\PTEmbedElemFood.lua
