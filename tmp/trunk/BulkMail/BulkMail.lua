@@ -388,7 +388,6 @@ function BulkMail:UpdateSendCost()
 end
 
 function BulkMail:Send()
-	self:Print('foo')
 	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
 		local itemDest
