@@ -107,13 +107,9 @@ end
 
 function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
-	self:RegisterEvent("MAIL_SEND_SUCCESS")
 	self:RegisterEvent("MAIL_CLOSED")
 end
 
-function BulkMail:MAIL_SEND_SUCCESS()
-	self:Print(GetTime())
-end
 function BulkMail:MAIL_SHOW()
 	OpenAllBags() -- make sure container frames are all seen before we run through them
 	OpenAllBags() -- in case a bag was open already and made the first OpenAllBags() hide it instead
