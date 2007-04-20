@@ -21,7 +21,6 @@ BulkMail.L = L
 
 local tablet   = AceLibrary("Tablet-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
-local metro    = AceLibrary("Metrognome-2.0")
 local pt       = PeriodicTableEmbed:GetInstance("1")
 
 function BulkMail:OnInitialize()
@@ -32,6 +31,7 @@ function BulkMail:OnInitialize()
 	self:RegisterDefaults('realm', {
 		autoSendListItems = {},
 	})
+	-- Converting old 'realm' level defaultDest setting to new 'char' level setting
 	if self.db.realm.defaultDestination and not self.db.char.defaultDestination then
 		self.db.char.defaultDestination = self.db.realm.defaultDestination
 	end
@@ -62,7 +62,7 @@ function BulkMail:OnInitialize()
 						input = true,
 						set   = "AddAutoSendItem",
 						get   = false,
-						validate = function(name) return self.db.realm.defaultDestination or not string.find(name, "^|[cC]") or not string.find(name, "^pt:") end,
+						validate = function(name) return self.db.char.defaultDestination or not string.find(name, "^|[cC]") or not string.find(name, "^pt:") end,
 						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
 						usage = "[destination] <item> [item2 item3 ...]",
 					},
@@ -99,8 +99,6 @@ function BulkMail:OnInitialize()
 	
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, args)
 	
-	metro:Register("BMSend", self.Send, 0.1, self)
-	
 	self.containerFrames = {}
 	self.destCache       = {}
 	self.sendCache       = {}
@@ -109,12 +107,16 @@ end
 
 function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
+	self:RegisterEvent("MAIL_SEND_SUCCESS")
 	self:RegisterEvent("MAIL_CLOSED")
 end
 
+function BulkMail:MAIL_SEND_SUCCESS()
+	self:Print(GetTime())
+end
 function BulkMail:MAIL_SHOW()
-	OpenAllBags()
-	OpenAllBags()
+	OpenAllBags() -- make sure container frames are all seen before we run through them
+	OpenAllBags() -- in case a bag was open already and made the first OpenAllBags() hide it instead
 	self:InitializeContainerFrames()
 	self:DestCacheBuild()
 	self:SecureHook("ContainerFrameItemButton_OnModifiedClick")
@@ -165,7 +167,7 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 		self.pmsqDestination = nil
 	end
 	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
-		metro:Start("BMSend")
+		self:ScheduleRepeatingEvent("BMSend", self.Send, 0.1, self)
 	else
 		this = SendMailMailButton
 		return self.hooks[frame].OnClick(a1)
@@ -331,7 +333,7 @@ end
 function BulkMail:AddAutoSendItem(...)
 	local arg = {...}
 	if string.find(arg[1], "^|[cC]") or string.find(arg[1], "^pt:") then	--first arg is an item or PT set, not a name
-		table.insert(arg, 1, self.db.realm.defaultDestination)
+		table.insert(arg, 1, self.db.char.defaultDestination)
 	end
 
 	for i = 2, #arg do
@@ -390,6 +392,7 @@ function BulkMail:UpdateSendCost()
 end
 
 function BulkMail:Send()
+	self:Print('foo')
 	local cache = self.sendCache and select(2, next(self.sendCache))
 	if GetSendMailItem() then
 		local itemDest
@@ -397,15 +400,15 @@ function BulkMail:Send()
 			local packageID = SendMailPackageButton:GetID()
 			itemDest = self.db.realm.autoSendListItems[tostring(packageID)] or self:GetPTSendDest(packageID)
 		end
-		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.realm.defaultDestination or '')
+		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
 			this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
-		elseif not self.db.realm.defaultDestination then
+		elseif not self.db.char.defaultDestination then
 			self:Print(L["No default destination set."])
 			self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 			self.cacheLock = false
-			return metro:Stop("BMSend")
+			return self:CancelScheduledEvent("BMSend")
 		end
 	elseif cache then
 		local bag, slot = unpack(cache)
@@ -414,7 +417,7 @@ function BulkMail:Send()
 		SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or '', "item:(%d+):")) or 0)
 		return self:SendCacheRemove(bag, slot)
 	else
-		metro:Stop("BMSend")
+		self:CancelScheduledEvent("BMSend")
 		return self:SendCacheCleanUp()
 	end
 end
@@ -426,11 +429,11 @@ function BulkMail:QuickSend(frame, slot, destination)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
 		if GetSendMailItem() then
-			SendMailNameEditBox:SetText(destination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.realm.defaultDestination or '')
+			SendMailNameEditBox:SetText(destination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.char.defaultDestination or '')
 			if SendMailNameEditBox:GetText() ~= '' then
 				this = SendMailMailButton
 				return self.hooks[SendMailMailButton].OnClick()
-			elseif not self.db.realm.defaultDestination then
+			elseif not self.db.char.defaultDestination then
 				self:Print(L["No default destination set."])
 				self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 			end
