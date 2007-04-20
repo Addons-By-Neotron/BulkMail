@@ -1,3 +1,5 @@
+- Default destination saved per-character instead of per-realm
+
 0.7.2:
 - QuickSending an item no longer locks its container slot
 

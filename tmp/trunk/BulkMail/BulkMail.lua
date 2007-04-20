@@ -32,15 +32,17 @@ function BulkMail:OnInitialize()
 	self:RegisterDefaults('realm', {
 		autoSendListItems = {},
 	})
-	
+	if self.db.realm.defaultDestination and not self.db.char.defaultDestination then
+		self.db.char.defaultDestination = self.db.realm.defaultDestination
+	end
 	local args = {
 		type = "group",
 		args = {
 			defaultdest = {
 				name  = "Default destination", type = "text",
 				desc  = "Set the default recipient of autosent items",
-				get   = function() return self.db.realm.defaultDestination end,
-				set   = function(dest) self.db.realm.defaultDestination = dest end,
+				get   = function() return self.db.char.defaultDestination end,
+				set   = function(dest) self.db.char.defaultDestination = dest end,
 				usage = "<destination>",
 			},
 			
@@ -172,7 +174,7 @@ end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
 	BulkMail:ShowGUI()
-	BulkMail:SendCacheBuild(SendMailNameEditBox:GetText())
+	BulkMail:SendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
 	return self.hooks[frame].OnClick(a1)
 end
 
