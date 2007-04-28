@@ -40,6 +40,7 @@ local function destCacheBuild()
 	end
 end
 
+--Create a table of PT sets for which the user has autosend destinations.
 local function ptSetsCacheBuild()
 	ptSetsCache = {}
 	for set in pairs(BulkMail.db.realm.autoSendListItems) do
@@ -49,6 +50,7 @@ local function ptSetsCacheBuild()
 	end
 end
 
+--Check if this item is part of a PT autosend set and return its destination.
 local function getPTSendDest(itemID)
 	local sets = pt:ItemInSets(tonumber(itemID), ptSetsCache)
 	if sets then
