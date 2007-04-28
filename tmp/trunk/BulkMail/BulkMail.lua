@@ -13,7 +13,9 @@ local cacheLock, pmsqDest --variables
 --[[--------------------------------------------------------------------------------
   Local Processing
 -----------------------------------------------------------------------------------]]
-local function initializeContainerFrames() --creates containerFrames, a table consisting of all frames which are container buttons
+--Creates containerFrames, a table consisting of all frames which are container buttons.
+--We'll use this for highlighting and click detection across as many addons as we can.
+local function initializeContainerFrames()
 	local enum = EnumerateFrames
 	local f = enum()
 	containerFrames = {}
@@ -28,6 +30,9 @@ local function initializeContainerFrames() --creates containerFrames, a table co
 	end
 end
 
+--Creates destCache, a lookup table for all destinations with autosend items.
+--Vastly improves performance when typing in destinations, allowing us to
+--forego checking the autosend list every time a new character is typed.
 local function destCacheBuild()
 	destCache = {}
 	for _, dest in pairs(BulkMail.db.realm.autoSendListItems) do
@@ -51,6 +56,8 @@ local function getPTSendDest(itemID)
 	end
 end
 
+--Updates the "Postage" field in the Send Mail frame to reflect the total
+--price of all the items that BulkMail will send.
 local function updateSendCost()
 	if sendCache and #sendCache > 0 then
 		local numMails = #sendCache
@@ -63,6 +70,9 @@ local function updateSendCost()
 	end
 end
 
+--Returns the position in the sendCache of an item.
+--Used mostly as a boolean check for items in BulkMail's send queue,
+--but the return value is helpful for GUI purposes.
 local function sendCachePos(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
 	if sendCache and next(sendCache) then
@@ -74,6 +84,7 @@ local function sendCachePos(bag, slot)
 	end
 end
 
+--Add a container slot to BulkMail's send queue.
 local function sendCacheAdd(bag, slot, squelch)
 	--convert to (bag, slot, squelch) if called as (frame, squelch)
 	if type(slot) ~= "number" then
@@ -102,6 +113,7 @@ local function sendCacheAdd(bag, slot, squelch)
 	updateSendCost()
 end
 
+--Remove a container slot from BulkMail's send queue.
 local function sendCacheRemove(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
 	local i = sendCachePos(bag, slot)
@@ -116,6 +128,7 @@ local function sendCacheRemove(bag, slot)
 	end
 end
 
+--Toggle a container slot's presence in BulkMail's send queue.
 local function sendCacheToggle(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
 	if sendCachePos(bag, slot) then
@@ -125,6 +138,10 @@ local function sendCacheToggle(bag, slot)
 	end
 end
 
+--Removes all entries in BulkMail's send queue.
+--If passed with the argument 'true', will only remove the entries created by 
+--BulkMail (used for refreshing the list as the destination changes without 
+--clearing the items the user has added manually this session).
 local function sendCacheCleanup(autoOnly)
 	if sendCache and next(sendCache) then
 		for _, cache in pairs(sendCache) do
@@ -137,6 +154,9 @@ local function sendCacheCleanup(autoOnly)
 	cacheLock = false
 end
 
+--Populate BulkMail's send queue with container slots holding items in
+--the autosend list for the current destination (or the default destination
+--if the destination field is blank.
 local function sendCacheBuild(destination)
 	if not cacheLock then
 		sendCacheCleanup(true)
@@ -384,6 +404,9 @@ end
 --[[--------------------------------------------------------------------------------
   Actions
 -----------------------------------------------------------------------------------]]
+--Sends the current item in the SendMailItemButton to the currently-specified
+--destination (or the default if that field is blank), then supplies items and
+--destinations from BulkMail's send queue and sends them.
 function BulkMail:Send()
 	local cache = sendCache and select(2, next(sendCache))
 	if GetSendMailItem() then
@@ -417,6 +440,10 @@ function BulkMail:Send()
 	end
 end
 
+--Send the container slot's item immediately to its autosend destination
+--(or the default destination if no destination specified).
+--This can be done whenever the mailbox is open, and is run when the user
+--Ctrl-Shift-LeftClicks on an item.
 function BulkMail:QuickSend(bag, slot, dest)
 	--convert to (bag, slot, dest) if called as (frame, dest)
 	if type(slot) ~= "number" then
