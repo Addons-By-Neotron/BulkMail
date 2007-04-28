@@ -1,19 +1,3 @@
-local function BuildItemLink(c,i,n)
-	if(((c or "")=="") or ((i or "")=="") or ((n or "")=="")) then return "" end
-	if(strlen(c)<8) then c="ff"..strlower(c) end
-	return format("|c%s|Hitem:%s|h[%s]|h|r",c,i,n)
-end
-
-local function GetItemLink(item)
-	local name, _, rarity = GetItemInfo(item)
-	if name and rarity then
-		local color = string.sub(select(4, GetItemQualityColor(rarity)), 3)
-		return BuildItemLink(color, item, name) or name
-	else
-		return item
-	end
-end
-
 BulkMail = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "AceHook-2.1", "AceConsole-2.0")
 
 local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
@@ -23,10 +7,166 @@ local tablet   = AceLibrary("Tablet-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = PeriodicTableEmbed:GetInstance("1")
 
+local containerFrames, destCache, sendCache, ptSetsCache --tables
+local cacheLock, pmsqDest --variables
+
+--[[--------------------------------------------------------------------------------
+  Local Processing
+-----------------------------------------------------------------------------------]]
+local function initializeContainerFrames() --creates containerFrames, a table consisting of all frames which are container buttons
+	local enum = EnumerateFrames
+	local f = enum()
+	containerFrames = {}
+	while f do
+		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
+		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and f.hasItem and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
+			containerFrames[bag] = containerFrames[bag] or {}
+			containerFrames[bag][slot] = containerFrames[bag][slot] or {}
+			table.insert(containerFrames[bag][slot], f)
+		end
+		f = enum(f)
+	end
+end
+
+local function destCacheBuild()
+	destCache = {}
+	for _, dest in pairs(BulkMail.db.realm.autoSendListItems) do
+		destCache[string.lower(dest)] = true
+	end
+end
+
+local function ptSetsCacheBuild()
+	ptSetsCache = {}
+	for set in pairs(BulkMail.db.realm.autoSendListItems) do
+		if string.match(set, "^pt:") then
+			table.insert(ptSetsCache, string.match(set, "pt:(%w+)"))
+		end
+	end
+end
+
+local function getPTSendDest(itemID)
+	local sets = pt:ItemInSets(tonumber(itemID), ptSetsCache)
+	if sets then
+		return BulkMail.db.realm.autoSendListItems["pt:"..sets[1]]
+	end
+end
+
+local function updateSendCost()
+	if sendCache and #sendCache > 0 then
+		local numMails = #sendCache
+		if GetSendMailItem() then
+			numMails = numMails + 1
+		end
+		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * numMails)
+	else
+		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
+	end
+end
+
+local function sendCachePos(bag, slot)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	if sendCache and next(sendCache) then
+		for i, v in pairs(sendCache) do
+			if v[1] == bag and v[2] == slot then
+				return i
+			end
+		end
+	end
+end
+
+local function sendCacheAdd(bag, slot, squelch)
+	--convert to (bag, slot, squelch) if called as (frame, squelch)
+	if type(slot) ~= "number" then
+		bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
+	end
+
+	if not sendCache then
+		sendCache = {}
+	end
+	if not containerFrames then
+		initializeContainerFrames()
+	end
+	if GetContainerItemInfo(bag, slot) and containerFrames[bag] and containerFrames[bag][slot] and not sendCachePos(bag, slot) then
+		gratuity:SetBagItem(bag, slot)
+		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
+			table.insert(sendCache, {bag, slot})
+			for _, f in pairs(containerFrames[bag][slot]) do
+				if f.SetButtonState then f:SetButtonState("PUSHED", 1) end
+			end
+			BulkMail:RefreshGUI()
+			SendMailFrame_CanSend()
+		elseif not squelch then
+			BulkMail:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
+		end
+	end
+	updateSendCost()
+end
+
+local function sendCacheRemove(bag, slot)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	local i = sendCachePos(bag, slot)
+	if i then
+		sendCache[i] = nil
+		for _, f in pairs(containerFrames[bag][slot]) do
+			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
+		end
+		BulkMail:RefreshGUI()
+		updateSendCost()
+		SendMailFrame_CanSend()
+	end
+end
+
+local function sendCacheToggle(bag, slot)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	if sendCachePos(bag, slot) then
+		return sendCacheRemove(bag, slot)
+	else
+		return sendCacheAdd(bag, slot)
+	end
+end
+
+local function sendCacheCleanup(autoOnly)
+	if sendCache and next(sendCache) then
+		for _, cache in pairs(sendCache) do
+			local bag, slot = cache[1], cache[2]
+			if not autoOnly or BulkMail.db.realm.autoSendListItems[string.match(GetContainerItemLink(bag, slot), "item:(%d+)")] then
+				sendCacheRemove(bag, slot)
+			end
+		end
+	end
+	cacheLock = false
+end
+
+local function sendCacheBuild(destination)
+	if not cacheLock then
+		sendCacheCleanup(true)
+		destCacheBuild()
+		ptSetsCacheBuild()
+		if destination == '' or destCache[destination] then --no need to check for an item in the autosend list if the destination string doesn't have any autosends to its name
+			for bag, v in pairs(containerFrames) do
+				for slot, w in pairs(v) do
+					for _, f in pairs(w) do
+						local itemID = string.match(GetContainerItemLink(bag, slot) or "", "item:(%d+):")
+						local dest = BulkMail.db.realm.autoSendListItems[itemID] or getPTSendDest(itemID)
+						dest = dest and string.lower(dest)
+						if dest and dest ~= string.lower(UnitName('player')) and (destination == "" or dest == destination) then
+							sendCacheAdd(bag, slot)
+						end
+					end
+				end
+			end
+		end
+	end
+	BulkMail:RefreshGUI()
+end
+
+--[[--------------------------------------------------------------------------------
+  Setup
+-----------------------------------------------------------------------------------]]
 function BulkMail:OnInitialize()
 	self:RegisterDB("BulkMailDB")
 	self:RegisterDefaults('profile', {
-		tablet_data = {detached=true, },
+		tablet_data = {detached=true,},
 	})
 	self:RegisterDefaults('realm', {
 		autoSendListItems = {},
@@ -35,7 +175,8 @@ function BulkMail:OnInitialize()
 	if self.db.realm.defaultDestination and not self.db.char.defaultDestination then
 		self.db.char.defaultDestination = self.db.realm.defaultDestination
 	end
-	local args = {
+
+	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
 		type = "group",
 		args = {
 			defaultdest = {
@@ -45,7 +186,6 @@ function BulkMail:OnInitialize()
 				set   = function(dest) self.db.char.defaultDestination = dest end,
 				usage = "<destination>",
 			},
-			
 			autosend = {
 				name = "AutoSend", type = "group",
 				desc = "AutoSend Options", aliases = "as",
@@ -62,7 +202,7 @@ function BulkMail:OnInitialize()
 						input = true,
 						set   = "AddAutoSendItem",
 						get   = false,
-						validate = function(name) return self.db.char.defaultDestination or not string.find(name, "^|[cC]") or not string.find(name, "^pt:") end,
+						validate = function(name) return self.db.char.defaultDestination or not string.match(name, "^|[cC]") or not string.match(name, "^pt:") end,
 						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
 						usage = "[destination] <item> [item2 item3 ...]",
 					},
@@ -95,248 +235,37 @@ function BulkMail:OnInitialize()
 				},
 			},
 		},
-	}
-	
-	self:RegisterChatCommand({"/bulkmail", "/bm"}, args)
-	
-	self.containerFrames = {}
-	self.destCache       = {}
-	self.sendCache       = {}
-	self.ptSetsCache     = {}
+	})
 end
 
 function BulkMail:OnEnable()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
-end
-
-function BulkMail:MAIL_SHOW()
-	OpenAllBags() -- make sure container frames are all seen before we run through them
-	OpenAllBags() -- in case a bag was open already and made the first OpenAllBags() hide it instead
-	self:InitializeContainerFrames()
-	self:DestCacheBuild()
-	self:SecureHook("ContainerFrameItemButton_OnModifiedClick")
-	self:SecureHook("SendMailFrame_CanSend")
-	self:HookScript(SendMailMailButton, "OnClick", "SendMailMailButton_OnClick")
-	self:HookScript(MailFrameTab2, "OnClick", "MailFrameTab2_OnClick")
-	self:HookScript(SendMailNameEditBox, "OnTextChanged", "SendMailNameEditBox_OnTextChanged")
-
-	SendMailMailButton:Enable()
-end
-
-function BulkMail:MAIL_CLOSED()
-	self:UnhookAll()
-	self:SendCacheCleanUp()
-	for bag, slot in pairs(self.containerFrames) do
-		for _, f in pairs(slot) do
-			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
-		end
-	end
-	BulkMail:HideGUI()
+	self:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
 --[[--------------------------------------------------------------------------------
-  Hooks
+  Console Functions
 -----------------------------------------------------------------------------------]]
-function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
-	if IsControlKeyDown() and IsShiftKeyDown() then
-		self:QuickSend(this)
-	end
-	if IsAltKeyDown() then
-		self:SendCacheToggle(this)
-	else
-		self:SendCacheRemove(this)
-	end
-end
-
-function BulkMail:SendMailFrame_CanSend()
-	if (self.sendCache and next(self.sendCache)) or GetSendMailItem() then
-		SendMailMailButton:Enable()
-	end
-	self:RefreshGUI()
-end
-
-function BulkMail:SendMailMailButton_OnClick(frame, a1)
-	self.cacheLock = true
-	self.pmsqDestination = SendMailNameEditBox:GetText()
-	if SendMailNameEditBox:GetText() == '' then
-		self.pmsqDestination = nil
-	end
-	if GetSendMailItem() or self.sendCache and next(self.sendCache) then
-		self:ScheduleRepeatingEvent("BMSend", self.Send, 0.1, self)
-	else
-		this = SendMailMailButton
-		return self.hooks[frame].OnClick(a1)
-	end
-end
-
-function BulkMail:MailFrameTab2_OnClick(frame, a1)
-	BulkMail:ShowGUI()
-	BulkMail:SendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
-	return self.hooks[frame].OnClick(a1)
-end
-
-function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
-	BulkMail:SendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
-	return self.hooks[frame].OnTextChanged(a1)
-end
-
---[[--------------------------------------------------------------------------------
-  Main Processing
------------------------------------------------------------------------------------]]
-
-function BulkMail:InitializeContainerFrames() --creates self.containerFrames, a table consisting of all frames which are container buttons
-	local enum = EnumerateFrames
-	local f = enum()
-	self.containerFrames = {}
-	while f do
-		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
-		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
-			self.containerFrames[bag] = self.containerFrames[bag] or {}
-			self.containerFrames[bag][slot] = self.containerFrames[bag][slot] or {}
-			table.insert(self.containerFrames[bag][slot], f)
-		end
-		f = enum(f)
-	end
-end
-
-function BulkMail:DestCacheBuild()
-	self.destCache = {}
-	for _, dest in pairs(self.db.realm.autoSendListItems) do
-		self.destCache[string.lower(dest)] = true
-	end
-end
-
-function BulkMail:PTSetsCacheBuild()
-	self.ptSetsCache = {}
-	for set in pairs(self.db.realm.autoSendListItems) do
-		if string.find(set, "^pt:") then
-			table.insert(self.ptSetsCache, select(3, string.find(set, "pt:(%w+)")))
-		end
-	end
-end
-
-function BulkMail:GetPTSendDest(itemID)
-	local sets = pt:ItemInSets(tonumber(itemID), self.ptSetsCache)
-	if sets then
-		return self.db.realm.autoSendListItems["pt:"..sets[1]]
-	end
-end
-
-function BulkMail:SendCacheBuild(destination)
-	if not self.cacheLock then
-		self:SendCacheCleanUp(true)
-		self:DestCacheBuild()
-		self:PTSetsCacheBuild()
-		if destination == '' or self.destCache[destination] then -- no need to check for an item in the autosend list if the destination string doesn't have any
-			for bag, v in pairs(self.containerFrames) do
-				for slot, w in pairs(v) do
-					for _, f in pairs(w) do
-						local itemID = select(3, string.find(GetContainerItemLink(bag, slot) or "", "item:(%d+):"))
-						local dest = self.db.realm.autoSendListItems[itemID] or self:GetPTSendDest(itemID)
-						dest = dest and string.lower(dest)
-						if dest and dest ~= string.lower(UnitName('player')) and (destination == "" or dest == destination) then
-							self:SendCacheAdd(bag, slot)
-						end
-					end
-				end
-			end
-		end
-	end
-	self:RefreshGUI()
-end
-
-function BulkMail:SendCachePos(frame, slot)
-	local bag = slot and frame or frame:GetParent():GetID()
-	slot = slot or frame:GetID()
-	if self.sendCache and next(self.sendCache) then
-		for i, v in pairs(self.sendCache) do
-			if v[1] == bag and v[2] == slot then
-				return i
-			end
-		end
-	end
-end
-
-function BulkMail:SendCacheAdd(frame, slot, squelch)
-	local bag = slot and frame or frame:GetParent():GetID()
-	slot = slot or frame:GetID()
-	if not self.sendCache then
-		self.sendCache = {}
-	end
-	if not self.containerFrames then
-		InitializeContainerFrames()
-	end
-	if GetContainerItemInfo(bag, slot) and self.containerFrames[bag] and self.containerFrames[bag][slot] and not self:SendCachePos(bag, slot) then
-		gratuity:SetBagItem(bag, slot)
-		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
-			table.insert(self.sendCache, {bag, slot})
-			for _, f in pairs(self.containerFrames[bag][slot]) do
-				if f.SetButtonState then f:SetButtonState("PUSHED", 1) end
-			end
-			self:RefreshGUI()
-			SendMailFrame_CanSend()
-		elseif not squelch then
-			self:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
-		end
-	end
-	return self:UpdateSendCost()
-end
-
-function BulkMail:SendCacheRemove(frame, slot)
-	local bag = slot and frame or frame:GetParent():GetID()
-	slot = slot or frame:GetID()
-	local i = BulkMail:SendCachePos(bag, slot)
-	if i then
-		self.sendCache[i] = nil
-		for _, f in pairs(self.containerFrames[bag][slot]) do
-			if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
-		end
-		self:RefreshGUI()
-		self:UpdateSendCost()
-		SendMailFrame_CanSend()
-	end
-end
-
-function BulkMail:SendCacheCleanUp(autoOnly)
-	if self.sendCache and next(self.sendCache) then
-		for _, cache in pairs(self.sendCache) do
-			if not autoOnly or self.db.realm.autoSendListItems[select(3, string.find(GetContainerItemLink(unpack(cache)), "item:(%d+)"))] then
-				self:SendCacheRemove(unpack(cache))
-			end
-		end
-
-	end
-	self.cacheLock = false
-end
-
-function BulkMail:SendCacheToggle(frame, slot)
-	local bag = slot and frame or frame:GetParent():GetID()
-	slot = slot or frame:GetID()
-	if self:SendCachePos(bag, slot) then
-		return self:SendCacheRemove(bag, slot)
-	else
-		return self:SendCacheAdd(bag, slot)
-	end
-end
-
 function BulkMail:ListAutoSendItems()
 	for itemID, dest in pairs(self.db.realm.autoSendListItems) do
-		self:Print(GetItemLink(itemID) .. " - " .. dest)
+		self:Print("%s - %s", (select(2, GetItemInfo(itemID))) or itemID, dest)
 	end
 end
 
 function BulkMail:AddAutoSendItem(...)
 	local arg = {...}
-	if string.find(arg[1], "^|[cC]") or string.find(arg[1], "^pt:") then	--first arg is an item or PT set, not a name
-		table.insert(arg, 1, self.db.char.defaultDestination)
+	local dest
+	if string.match(arg[1], "^|[cC]") or string.match(arg[1], "^pt:") then --first arg is an item or PT set, not a name
+		dest = self.db.char.defaultDestination
+	else
+		dest = table.remove(arg, 1)
 	end
-
-	for i = 2, #arg do
-		local itemID = select(3, string.find(arg[i], "item:(%d+)")) or select(3, string.find(arg[i], "(pt:%w+)"))
+	for i = 1, #arg do --cycle through all items supplied in the commandline
+		local itemID = string.match(arg[i], "item:(%d+)") or string.match(arg[i], "(pt:%w+)")
 		if itemID then
-			self.db.realm.autoSendListItems[tostring(itemID)] = arg[1]
-			self:Print("%s - %s", arg[i], arg[1])
+			self.db.realm.autoSendListItems[tostring(itemID)] = dest
+			self:Print("%s - %s", (select(2, GetItemInfo(itemID))) or itemID, dest)
 		end
 	end
 end
@@ -374,57 +303,131 @@ function BulkMail:ClearAutoSendList(confirm)
 	end
 end
 
+--[[--------------------------------------------------------------------------------
+  Events
+-----------------------------------------------------------------------------------]]
+function BulkMail:MAIL_SHOW()
+	OpenAllBags() --make sure container frames are all seen before we run through them
+	OpenAllBags() --in case previous line closed bags (if it was called while a bag was open)
+	initializeContainerFrames()
+	destCacheBuild()
 
-function BulkMail:UpdateSendCost()
-	if self.sendCache and #self.sendCache > 0 then
-		local numMails = #self.sendCache
-		if GetSendMailItem() then
-			numMails = numMails + 1
+	self:SecureHook("ContainerFrameItemButton_OnModifiedClick")
+	self:SecureHook("SendMailFrame_CanSend")
+	self:HookScript(SendMailMailButton, "OnClick", "SendMailMailButton_OnClick")
+	self:HookScript(MailFrameTab2, "OnClick", "MailFrameTab2_OnClick")
+	self:HookScript(SendMailNameEditBox, "OnTextChanged", "SendMailNameEditBox_OnTextChanged")
+
+	SendMailMailButton:Enable()
+end
+
+function BulkMail:MAIL_CLOSED()
+	self:UnhookAll()
+	sendCacheCleanup()
+	if containerFrames then
+		for bag, slot in pairs(containerFrames) do
+			for _, f in pairs(slot) do
+				if f.SetButtonState then f:SetButtonState("NORMAL", 0) end
+			end
 		end
-		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice() * numMails)
+	end
+	BulkMail:HideGUI()
+end
+BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED --MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
+
+--[[--------------------------------------------------------------------------------
+  Hooks
+-----------------------------------------------------------------------------------]]
+function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
+	if IsControlKeyDown() and IsShiftKeyDown() then
+		self:QuickSend(this)
+	end
+	if IsAltKeyDown() then
+		sendCacheToggle(this)
 	else
-		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
+		sendCacheRemove(this)
 	end
 end
 
+function BulkMail:SendMailFrame_CanSend()
+	if (sendCache and next(sendCache)) or GetSendMailItem() then
+		SendMailMailButton:Enable()
+	end
+	self:RefreshGUI()
+end
+
+function BulkMail:SendMailMailButton_OnClick(frame, a1)
+	cacheLock = true
+	pmsqDest = SendMailNameEditBox:GetText()
+	if SendMailNameEditBox:GetText() == '' then
+		pmsqDest = nil
+	end
+	if GetSendMailItem() or sendCache and next(sendCache) then
+		self:ScheduleRepeatingEvent("BMSend", self.Send, 0.1, self)
+	else
+		this = SendMailMailButton
+		return self.hooks[frame].OnClick(a1)
+	end
+end
+
+function BulkMail:MailFrameTab2_OnClick(frame, a1)
+	self:ShowGUI()
+	sendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
+	return self.hooks[frame].OnClick(a1)
+end
+
+function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
+	sendCacheBuild(string.lower(SendMailNameEditBox:GetText()))
+	return self.hooks[frame].OnTextChanged(a1)
+end
+
+--[[--------------------------------------------------------------------------------
+  Actions
+-----------------------------------------------------------------------------------]]
 function BulkMail:Send()
-	local cache = self.sendCache and select(2, next(self.sendCache))
+	local cache = sendCache and select(2, next(sendCache))
 	if GetSendMailItem() then
 		local itemDest
-		if not self.pmsqDestination then
+		if not pmsqDest then
 			local packageID = SendMailPackageButton:GetID()
-			itemDest = self.db.realm.autoSendListItems[tostring(packageID)] or self:GetPTSendDest(packageID)
+			itemDest = self.db.realm.autoSendListItems[tostring(packageID)] or getPTSendDest(packageID)
 		end
-		SendMailNameEditBox:SetText(self.pmsqDestination or itemDest or self.db.char.defaultDestination or '')
+		SendMailNameEditBox:SetText(pmsqDest or itemDest or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
 			this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
 			self:Print(L["No default destination set."])
 			self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
-			self.cacheLock = false
+			cacheLock = false
 			return self:CancelScheduledEvent("BMSend")
 		end
 	elseif cache then
-		local bag, slot = unpack(cache)
+		local bag, slot = cache[1], cache[2]
+		local itemLink = GetContainerItemLink(bag, slot)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
-		SendMailPackageButton:SetID(select(3,  string.find(GetContainerItemLink(bag, slot) or '', "item:(%d+):")) or 0)
-		return self:SendCacheRemove(bag, slot)
+		if itemLink then
+			SendMailPackageButton:SetID(string.match(itemLink, "item:(%d+):") or 0)
+		end
+		return sendCacheRemove(bag, slot)
 	else
 		self:CancelScheduledEvent("BMSend")
-		return self:SendCacheCleanUp()
+		return sendCacheCleanup()
 	end
 end
 
-function BulkMail:QuickSend(frame, slot, destination)
-	local bag = slot and frame or frame:GetParent():GetID()
-	slot = slot or frame:GetID()
+function BulkMail:QuickSend(bag, slot, dest)
+	--convert to (bag, slot, dest) if called as (frame, dest)
+	if type(slot) ~= "number" then
+		bag, slot, dest = bag:GetParent():GetID(), bag:GetID(), slot
+	end
+
 	if bag and slot then
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
 		if GetSendMailItem() then
-			SendMailNameEditBox:SetText(destination or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.char.defaultDestination or '')
+			SendMailNameEditBox:SetText(dest or self.db.realm.autoSendListItems[tostring(SendMailPackageButton:GetID())] or self.db.char.defaultDestination or '')
 			if SendMailNameEditBox:GetText() ~= '' then
 				this = SendMailMailButton
 				return self.hooks[SendMailMailButton].OnClick()
@@ -439,51 +442,62 @@ function BulkMail:QuickSend(frame, slot, destination)
 end
 
 --[[--------------------------------------------------------------------------------
-  GUI
+  GUI (rewritten for tablet by Kemayo)
 -----------------------------------------------------------------------------------]]
+local function getLockedContainerItem()
+	for bag=0, NUM_BAG_SLOTS do
+		for slot=1, GetContainerNumSlots(bag) do
+			if select(3, GetContainerItemInfo(bag, slot)) then
+				return bag, slot
+			end
+		end
+	end
+end
 
 function BulkMail:ShowGUI()
 	if not tablet:IsRegistered('BulkMail') then
 		tablet:Register('BulkMail', 'detachedData', self.db.profile.tablet_data,
-			'dontHook', true, 'showTitleWhenDetached', true,-- 'minWidth', 350,
-			'children', function()
-				tablet:SetTitle("BulkMail")
-				
-				local cat = tablet:AddCategory('columns', 1, 'text', L["Items to be sent (Alt-Click to add/remove):"],
-					'showWithoutChildren', true, 'child_indentation', 5)
-				
-				if #self.sendCache > 0 then
-					for i, v in pairs(self.sendCache) do
-						local link = GetContainerItemLink(v[1], v[2])
-						local texture, qty = GetContainerItemInfo(v[1], v[2])
-						local itemText = string.sub(link, 1, 10) .. string.sub(select(3, string.find(link, "(%b[])")), 2, -2)
-						itemText = qty > 1 and itemText .. " (" .. qty .. ")" or itemText
-						
-						cat:AddLine('text', itemText,
-							'checked', true, 'hasCheck', true, 'checkIcon', texture,
-							'func', self.OnItemSelect, 'arg1', self, 'arg2', v[1], 'arg3', v[2])
-					end
-				else
-					cat:AddLine('text', L["No items selected"])
+			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
+
+			tablet:SetTitle("BulkMail")
+			
+			local cat = tablet:AddCategory('columns', 1, 'text', L["Items to be sent (Alt-Click to add/remove):"],
+				'showWithoutChildren', true, 'child_indentation', 5)
+			
+			if sendCache and #sendCache > 0 then
+				for i, v in pairs(sendCache) do
+					local v1, v2 = v[1], v[2]
+					local itemLink = GetContainerItemLink(v1, v2)
+					local itemText = itemLink and GetItemInfo(itemLink)
+					local texture, qty = GetContainerItemInfo(v1, v2)
+					if qty and qty > 1 then
+						itemText = string.format("%s(%d)", itemText, qty)
+					end						
+					cat:AddLine('text', itemText,
+						'checked', true, 'hasCheck', true, 'checkIcon', texture,
+						'func', self.OnItemSelect, 'arg1', self, 'arg2', v1, 'arg3', v2)
 				end
-				
+			else
+				cat:AddLine('text', L["No items selected"])
+			end
+			
+			cat = tablet:AddCategory('columns', 1)
+			cat:AddLine('text', L["Drop items here for Sending"], 'justify', 'CENTER', 'func', self.OnDropClick, 'arg1', self)
+			
+			if sendCache and #sendCache > 0 then
 				cat = tablet:AddCategory('columns', 1)
-				cat:AddLine('text', L["Drop items here for Sending"], 'justify', 'CENTER', 'func', self.OnDropClick, 'arg1', self)
-				
-				if #self.sendCache > 0 then
-					cat = tablet:AddCategory('columns', 1)
-					cat:AddLine('text', L["Clear"], 'func', self.SendCacheCleanUp, 'arg1', self)
-					if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
-						cat:AddLine('text', L["Send"], 'func', self.OnSendClick, 'arg1', self)
-					else
-						cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
-					end
+				cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup, 'arg1')
+				if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
+					cat:AddLine('text', L["Send"], 'func', self.OnSendClick, 'arg1', self)
 				else
-					cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
-					cat:AddLine('text', L["Clear"])
-					cat:AddLine('text', L["Send"])
+					cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
 				end
-			end)
+			else
+				cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
+				cat:AddLine('text', L["Clear"])
+				cat:AddLine('text', L["Send"])
+			end
+		end)
 	end
 	tablet:Open('BulkMail')
 end
@@ -503,40 +517,30 @@ end
 function BulkMail:OnItemSelect(bag, slot)
 	if bag and slot and arg1 == "LeftButton" then
 		if IsAltKeyDown() then
-			BulkMail:SendCacheToggle(bag, slot)
+			sendCacheToggle(bag, slot)
 		elseif IsShiftKeyDown() and ChatFrameEditBox:IsVisible() then
 			ChatFrameEditBox:Insert(GetContainerItemLink(bag, slot))
-		elseif IsControlKeyDown() then
+		elseif IsControlKeyDown() and not IsShiftKeyDown() then
 			DressUpItemLink(GetContainerItemLink(bag, slot))
 		else
-			SetItemRef(select(3, string.find(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)")), GetContainerItemLink(bag, slot), arg1)
+			SetItemRef(string.match(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)"), GetContainerItemLink(bag, slot), arg1)
 		end
 	end
 end
 
 function BulkMail:OnSendClick()
-	if not self.sendCache then return end
+	if not sendCache then return end
 	self:SendMailMailButton_OnClick()
-end
-
-local function GetLockedContainerItem()
-	for bag=0, NUM_BAG_SLOTS do
-		for slot=1, GetContainerNumSlots(bag) do
-			if select(3, GetContainerItemInfo(bag, slot)) then
-				return bag, slot
-			end
-		end
-	end
 end
 
 function BulkMail:OnDropClick()
 	if GetSendMailItem() then
 		self:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
 	end
-	if CursorHasItem() and GetLockedContainerItem() then
-		self:SendCacheAdd(GetLockedContainerItem())
+	if CursorHasItem() and getLockedContainerItem() then
+		sendCacheAdd(getLockedContainerItem())
 		--To clear the cursor.
-		PickupContainerItem(GetLockedContainerItem())
+		PickupContainerItem(getLockedContainerItem())
 	end
 	self:RefreshGUI()
 end
