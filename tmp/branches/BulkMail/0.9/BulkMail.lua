@@ -5,23 +5,23 @@ BulkMail.L = L
 
 local tablet   = AceLibrary("Tablet-2.0")
 local gratuity = AceLibrary("Gratuity-2.0")
-local pt       = PeriodicTableEmbed:GetInstance("1")
+local pt       = AceLibrary("PeriodicTable-3.0")
+local dewdrop  = AceLibrary("Dewdrop-2.0")
 
-local containerFrames, destCache, sendCache, ptSetsCache --tables
+local containerFrames, destCache, sendCache, ptSetsCache, autoSendRules --tables
 local cacheLock, pmsqDest --variables
-
 --[[--------------------------------------------------------------------------------
   Local Processing
 -----------------------------------------------------------------------------------]]
---Creates containerFrames, a table consisting of all frames which are container buttons.
---We'll use this for highlighting and click detection across as many addons as we can.
+-- Creates containerFrames, a table consisting of all frames which are container buttons.
+-- We'll use this for highlighting and click detection across as many addons as we can.
 local function initializeContainerFrames()
 	local enum = EnumerateFrames
 	local f = enum()
 	containerFrames = {}
 	while f do
 		local bag, slot = f and f:GetParent() and f:GetParent():GetID() or -1, f and f:GetID() or -1
-		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and f.hasItem and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
+		if bag >= 0 and bag <= NUM_BAG_SLOTS and slot > 0 and f.SplitStack and not f:GetParent().nextSlotCost and not f.GetInventorySlot then
 			containerFrames[bag] = containerFrames[bag] or {}
 			containerFrames[bag][slot] = containerFrames[bag][slot] or {}
 			table.insert(containerFrames[bag][slot], f)
@@ -30,17 +30,20 @@ local function initializeContainerFrames()
 	end
 end
 
---Creates destCache, a lookup table for all destinations with autosend items.
---Vastly improves performance when typing in destinations, allowing us to
---forego checking the autosend list every time a new character is typed.
+-- Creates destCache, a lookup table for all destinations with autosend items.
+-- Vastly improves performance when typing in destinations, allowing us to
+-- forego checking the autosend list every time a new character is typed.
 local function destCacheBuild()
 	destCache = {}
 	for _, dest in pairs(BulkMail.db.realm.autoSendListItems) do
 		destCache[string.lower(dest)] = true
 	end
+	for _, dest in pairs(autoSendRules) do
+		destCache[string.lower(dest)] = true
+	end
 end
 
---Create a table of PT sets for which the user has autosend destinations.
+-- Create a table of PT sets for which the user has autosend destinations.
 local function ptSetsCacheBuild()
 	ptSetsCache = {}
 	for set in pairs(BulkMail.db.realm.autoSendListItems) do
@@ -50,7 +53,7 @@ local function ptSetsCacheBuild()
 	end
 end
 
---Check if this item is part of a PT autosend set and return its destination.
+-- Check if this item is part of a PT autosend set and return its destination.
 local function getPTSendDest(itemID)
 	local sets = pt:ItemInSets(tonumber(itemID), ptSetsCache)
 	if sets then
@@ -58,8 +61,8 @@ local function getPTSendDest(itemID)
 	end
 end
 
---Updates the "Postage" field in the Send Mail frame to reflect the total
---price of all the items that BulkMail will send.
+-- Updates the "Postage" field in the Send Mail frame to reflect the total
+-- price of all the items that BulkMail will send.
 local function updateSendCost()
 	if sendCache and #sendCache > 0 then
 		local numMails = #sendCache
@@ -72,11 +75,11 @@ local function updateSendCost()
 	end
 end
 
---Returns the position in the sendCache of an item.
---Used mostly as a boolean check for items in BulkMail's send queue,
---but the return value is helpful for GUI purposes.
+-- Returns the position in the sendCache of an item.
+-- Used mostly as a boolean check for items in BulkMail's send queue,
+-- but the return value is helpful for GUI purposes.
 local function sendCachePos(bag, slot)
-	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	if sendCache and next(sendCache) then
 		for i, v in pairs(sendCache) do
 			if v[1] == bag and v[2] == slot then
@@ -86,9 +89,9 @@ local function sendCachePos(bag, slot)
 	end
 end
 
---Add a container slot to BulkMail's send queue.
+-- Add a container slot to BulkMail's send queue.
 local function sendCacheAdd(bag, slot, squelch)
-	--convert to (bag, slot, squelch) if called as (frame, squelch)
+	-- convert to (bag, slot, squelch) if called as (frame, squelch)
 	if type(slot) ~= "number" then
 		bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
 	end
@@ -115,9 +118,9 @@ local function sendCacheAdd(bag, slot, squelch)
 	updateSendCost()
 end
 
---Remove a container slot from BulkMail's send queue.
+-- Remove a container slot from BulkMail's send queue.
 local function sendCacheRemove(bag, slot)
-	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	local i = sendCachePos(bag, slot)
 	if i then
 		sendCache[i] = nil
@@ -130,9 +133,9 @@ local function sendCacheRemove(bag, slot)
 	end
 end
 
---Toggle a container slot's presence in BulkMail's send queue.
+-- Toggle a container slot's presence in BulkMail's send queue.
 local function sendCacheToggle(bag, slot)
-	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID() --convert to (bag, slot) if called as (frame)
+	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	if sendCachePos(bag, slot) then
 		return sendCacheRemove(bag, slot)
 	else
@@ -140,10 +143,10 @@ local function sendCacheToggle(bag, slot)
 	end
 end
 
---Removes all entries in BulkMail's send queue.
---If passed with the argument 'true', will only remove the entries created by 
---BulkMail (used for refreshing the list as the destination changes without 
---clearing the items the user has added manually this session).
+-- Removes all entries in BulkMail's send queue.
+-- If passed with the argument 'true', will only remove the entries created by 
+-- BulkMail (used for refreshing the list as the destination changes without 
+-- clearing the items the user has added manually this session).
 local function sendCacheCleanup(autoOnly)
 	if sendCache and next(sendCache) then
 		for _, cache in pairs(sendCache) do
@@ -156,15 +159,15 @@ local function sendCacheCleanup(autoOnly)
 	cacheLock = false
 end
 
---Populate BulkMail's send queue with container slots holding items in
---the autosend list for the current destination (or the default destination
---if the destination field is blank.
+-- Populate BulkMail's send queue with container slots holding items in
+-- the autosend list for the current destination (or the default destination
+-- if the destination field is blank.
 local function sendCacheBuild(destination)
 	if not cacheLock then
 		sendCacheCleanup(true)
 		destCacheBuild()
 		ptSetsCacheBuild()
-		if destination == '' or destCache[destination] then --no need to check for an item in the autosend list if the destination string doesn't have any autosends to its name
+		if destination == '' or destCache[destination] then  -- no need to check for an item in the autosend list if the destination string doesn't have any autosends to its name
 			for bag, v in pairs(containerFrames) do
 				for slot, w in pairs(v) do
 					for _, f in pairs(w) do
@@ -191,8 +194,18 @@ function BulkMail:OnInitialize()
 		tablet_data = {detached=true,},
 	})
 	self:RegisterDefaults('realm', {
-		autoSendListItems = {},
+		autoSendRules = {
+			['*'] = {
+				include = {
+					['*'] = {},
+				},
+				exclude = {
+					['*'] = {},
+				},
+			},
+		},
 	})
+	autoSendRules = self.db.realm.autoSendRules
 	-- Converting old 'realm' level defaultDest setting to new 'char' level setting
 	if self.db.realm.defaultDestination and not self.db.char.defaultDestination then
 		self.db.char.defaultDestination = self.db.realm.defaultDestination
@@ -209,49 +222,55 @@ function BulkMail:OnInitialize()
 				usage = "<destination>",
 			},
 			autosend = {
-				name = "AutoSend", type = "group",
-				desc = "AutoSend Options", aliases = "as",
+				name = L["AutoSend"], type = "group",
+				desc = L["AutoSend Options"], aliases = "as",
 				args = {
+					edit = {
+						name = L["edit"],
+						type = "execute",
+						desc = L["Edit AutoSend definitions."],
+						func = function() tablet:Open("BMAutoSendEdit") end,
+					},
 					list = {
-						name  = "list", type = "execute",
-						desc  = "Print current AutoSend list.",
+						name  = L["list"], type = "execute",
+						desc  = L["Print current AutoSend list."],
 						aliases = "ls",
 						func  = "ListAutoSendItems",
 					},
 					add = {
-						name  = "add", type = "text",
-						desc  = "Add items to the AutoSend list.",
+						name  = L["add"], type = "text",
+						desc  = L["Add items to the AutoSend list."],
 						input = true,
 						set   = "AddAutoSendItem",
 						get   = false,
 						validate = function(name) return self.db.char.defaultDestination or not string.match(name, "^|[cC]") or not string.match(name, "^pt:") end,
 						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
-						usage = "[destination] <item> [item2 item3 ...]",
+						usage = L["[destination] <item> [item2 item3 ...]"],
 					},
 					rm = {
-						name  = "remove", type = "text",
+						name  = L["remove"], type = "text",
 						aliases = "rm, delete, del",
-						desc  = "Remove items from the AutoSend list.",
+						desc  = L["Remove items from the AutoSend list."],
 						input = true,
 						set   = "RemoveAutoSendItem",
 						get   = false,
-						usage = "<item> [item2 item3 ...]",
+						usage = L["<item> [item2 item3 ...]"],
 					},
 					rmdest = {
-						name  = "rmdest", type = "text",
+						name  = L["rmdest"], type = "text",
 						desc  = "Remove all items corresponding to a particular destination from your AutoSend list.",
 						input = true,
 						set   = "RemoveAutoSendDestination",
 						get   = false,
-						usage = "<destination>",
+						usage = L["<destination>"],
 					},
 					clear = {
-						name  = "clear", type = "text",
-						desc  = "Clear AutoSend list completely.",
+						name  = L["clear"], type = "text",
+						desc  = L["Clear AutoSend list completely."],
 						set   = "ClearAutoSendList",
 						get   = false,
 						validate = function(confirm) if confirm == "CONFIRM" then return true end end,
-						error = "You must type 'CONFIRM' to clear.",
+						error = L["You must type 'CONFIRM' to clear."],
 						usage = "CONFIRM",
 					},
 				},
@@ -261,9 +280,15 @@ function BulkMail:OnInitialize()
 end
 
 function BulkMail:OnEnable()
+	self:RegisterAutoSendEditTablet()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
+end
+
+function BulkMail:OnDisable()
+	self:UnregisterAllEvents()
+	tablet:Unregister("BMAutoSendEdit")
 end
 
 --[[--------------------------------------------------------------------------------
@@ -278,16 +303,17 @@ end
 function BulkMail:AddAutoSendItem(...)
 	local arg = {...}
 	local dest
-	if string.match(arg[1], "^|[cC]") or string.match(arg[1], "^pt:") then --first arg is an item or PT set, not a name
+	if string.match(arg[1], "^|[cC]") then  -- first arg is an item or PT set, not a name
 		dest = self.db.char.defaultDestination
 	else
 		dest = table.remove(arg, 1)
 	end
-	for i = 1, #arg do --cycle through all items supplied in the commandline
-		local itemID = string.match(arg[i], "item:(%d+)") or string.match(arg[i], "(pt:%w+)")
+	for i = 1, #arg do  -- cycle through all items supplied in the commandline
+		local itemID = string.match(arg[i], "item:(%d+)")
 		if itemID then
-			self.db.realm.autoSendListItems[tostring(itemID)] = dest
-			self:Print("%s - %s", (select(2, GetItemInfo(itemID))) or itemID, dest)
+			table.insert(autoSendRules[dest].include.items, itemID)
+			tablet:Refresh("BMAutoSendEdit")
+			self:Print("%s - %s", select(2, GetItemInfo(itemID)) or itemID, dest)
 		end
 	end
 end
@@ -310,16 +336,12 @@ function BulkMail:RemoveAutoSendItem(arglist)
 end
 
 function BulkMail:RemoveAutoSendDestination(destination)
-	for itemID, dest in pairs(self.db.realm.autoSendListItems) do
-		if destination == dest then
-			self.db.realm.autoSendListItems[itemID] = nil
-		end
-	end
+	autoSendRules[destination] = nil
 end
 
 function BulkMail:ClearAutoSendList(confirm)
 	if string.lower(confirm) == "confirm" then
-		self.db.realm.autoSendListItems = {}
+		self:ResetDB("realm")
 	else
 		self:Print(L["You must type 'confirm' to clear"])
 	end
@@ -329,8 +351,8 @@ end
   Events
 -----------------------------------------------------------------------------------]]
 function BulkMail:MAIL_SHOW()
-	OpenAllBags() --make sure container frames are all seen before we run through them
-	OpenAllBags() --in case previous line closed bags (if it was called while a bag was open)
+	OpenAllBags()  -- make sure container frames are all seen before we run through them
+	OpenAllBags()  -- in case previous line closed bags (if it was called while a bag was open)
 	initializeContainerFrames()
 	destCacheBuild()
 
@@ -355,7 +377,7 @@ function BulkMail:MAIL_CLOSED()
 	end
 	BulkMail:HideGUI()
 end
-BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED --MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
+BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
 --[[--------------------------------------------------------------------------------
   Hooks
@@ -385,7 +407,7 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 		pmsqDest = nil
 	end
 	if GetSendMailItem() or sendCache and next(sendCache) then
-		self:ScheduleRepeatingEvent("BMSend", self.Send, 0.1, self)
+		self:ScheduleRepeatingEvent("BMSendLoop", self.Send, 0.1, self)
 	else
 		this = SendMailMailButton
 		return self.hooks[frame].OnClick(a1)
@@ -406,9 +428,9 @@ end
 --[[--------------------------------------------------------------------------------
   Actions
 -----------------------------------------------------------------------------------]]
---Sends the current item in the SendMailItemButton to the currently-specified
---destination (or the default if that field is blank), then supplies items and
---destinations from BulkMail's send queue and sends them.
+-- Sends the current item in the SendMailItemButton to the currently-specified
+-- destination (or the default if that field is blank), then supplies items and
+-- destinations from BulkMail's send queue and sends them.
 function BulkMail:Send()
 	local cache = sendCache and select(2, next(sendCache))
 	if GetSendMailItem() then
@@ -425,7 +447,7 @@ function BulkMail:Send()
 			self:Print(L["No default destination set."])
 			self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 			cacheLock = false
-			return self:CancelScheduledEvent("BMSend")
+			return self:CancelScheduledEvent("BMSendLoop")
 		end
 	elseif cache then
 		local bag, slot = cache[1], cache[2]
@@ -437,17 +459,17 @@ function BulkMail:Send()
 		end
 		return sendCacheRemove(bag, slot)
 	else
-		self:CancelScheduledEvent("BMSend")
+		self:CancelScheduledEvent("BMSendLoop")
 		return sendCacheCleanup()
 	end
 end
 
---Send the container slot's item immediately to its autosend destination
---(or the default destination if no destination specified).
---This can be done whenever the mailbox is open, and is run when the user
---Ctrl-Shift-LeftClicks on an item.
+-- Send the container slot's item immediately to its autosend destination
+-- (or the default destination if no destination specified).
+-- This can be done whenever the mailbox is open, and is run when the user
+-- Ctrl-Shift-LeftClicks on an item.
 function BulkMail:QuickSend(bag, slot, dest)
-	--convert to (bag, slot, dest) if called as (frame, dest)
+	-- convert to (bag, slot, dest) if called as (frame, dest)
 	if type(slot) ~= "number" then
 		bag, slot, dest = bag:GetParent():GetID(), bag:GetID(), slot
 	end
@@ -471,7 +493,7 @@ function BulkMail:QuickSend(bag, slot, dest)
 end
 
 --[[--------------------------------------------------------------------------------
-  GUI (rewritten for tablet by Kemayo)
+  Mailbox GUI (rewritten for tablet by Kemayo)
 -----------------------------------------------------------------------------------]]
 local function getLockedContainerItem()
 	for bag=0, NUM_BAG_SLOTS do
@@ -568,8 +590,132 @@ function BulkMail:OnDropClick()
 	end
 	if CursorHasItem() and getLockedContainerItem() then
 		sendCacheAdd(getLockedContainerItem())
-		--To clear the cursor.
-		PickupContainerItem(getLockedContainerItem())
+		PickupContainerItem(getLockedContainerItem())  -- clears the cursor
 	end
 	self:RefreshGUI()
 end
+
+--[[--------------------------------------------------------------------------------
+  AutoSend Edit GUI
+-----------------------------------------------------------------------------------]]
+local shown = {}
+local showAddRuleMenu -- functions
+
+local function addNewDest(dest)
+	local _ = autoSendRules[dest]
+	tablet:Refresh("BMAutoSendEdit")
+end
+
+local confirmedDestToRemove
+local function removeConfirmedDest()
+	autoSendRules[confirmedDestToRemove] = nil
+	tablet:Refresh("BMAutoSendEdit")
+end
+
+local function showAddRuleMenu(ruleset)
+	BulkMail:PrintLiteral(ruleset)
+end
+
+function BulkMail:RegisterAutoSendEditTablet()
+	tablet:Register("BMAutoSendEdit",
+		"children", function() self:FillAutoSendEditTablet() end, "data", {},
+		"cantAttach", true, "clickable", true,
+		"showTitleWhenDetached", true, "showHintWhenDetached", true,
+		"dontHook", true, "strata", "DIALOG")
+end
+
+function BulkMail:FillAutoSendEditTablet()
+	local cat
+	tablet:SetTitle(L["AutoSend Rules"])
+	-- categories; one per destination character
+	for dest, rulesets in pairs(autoSendRules) do
+		-- category title (destination character's name)
+		cat = tablet:AddCategory(
+			'id', dest, 'text', dest, 'showWithoutChildren', true,
+			'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown.dest and "Minus" or "Plus"),
+			'func', function(dest)
+				if IsControlKeyDown() then
+					confirmedDestToRemove = dest
+					StaticPopup_Show("BULKMAIL_REMOVE_DESTINATION")
+				else
+					shown.dest = not shown.dest
+				end
+				tablet:Refresh("BMAutoSendEdit")
+			end, 'arg1', dest)
+		-- rules list prototype
+		local function listRules(ruleset)
+			if not ruleset then return end
+			for ruletype, rules in pairs(ruleset) do
+				for k, rule in ipairs(rules) do
+					cat:AddLine(
+						'text', ruletype == "items" and select(2, GetItemInfo(rule)) or rule,
+						'indentation', 15,
+						'func', function(ruleset, id)
+							if IsControlKeyDown() then
+								table.remove(rules, k)
+								tablet:Refresh("BMAutoSendEdit")
+							end
+						end, 'arg1', rules, 'arg2', k)
+				end
+			end
+		end
+		if shown.dest then
+			-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)
+			cat:AddLine('text', L["Include"], 'indentation', 5, 'func', showAddRuleMenu, 'arg1', rulesets.include) 
+			listRules(rulesets.include)
+			-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules (not yet implemented)
+			cat:AddLine('text', L["Exclude"], 'indentation', 5, 'func', showAddRuleMenu, 'arg1', rulesets.exclude)
+			listRules(rulesets.exclude)
+		end
+	end
+
+	cat = tablet:AddCategory('id', "actions")
+	cat:AddLine('text', L["New Destination"], 'func', function() StaticPopup_Show("BULKMAIL_ADD_DESTINATION") end)
+	cat:AddLine('text', L["Close"], 'func', function() self:ScheduleEvent(function() tablet:Close("BMAutoSendEdit") end, 0.01) end)  -- WTF
+end
+
+StaticPopupDialogs["BULKMAIL_ADD_DESTINATION"] = {
+	text = L["BulkMail - New AutoSend Destination"],
+	button1 = L["Accept"],
+	button2 = L["Cancel"],
+	hasEditBox = 1,
+	maxLetters = 20,
+	OnAccept = function()
+		addNewDest(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+	end,
+	OnShow = function()
+		getglobal(this:GetName().."EditBox"):SetFocus()
+	end,
+	OnHide = function()
+		if ( ChatFrameEditBox:IsVisible() ) then
+			ChatFrameEditBox:SetFocus()
+		end
+		getglobal(this:GetName().."EditBox"):SetText("")
+	end,
+	EditBoxOnEnterPressed = function()
+		addNewDest(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+		this:GetParent():Hide()
+	end,
+	EditBoxOnEscapePressed = function()
+		this:GetParent():Hide()
+	end,
+	timeout = 0,
+	exclusive = 1,
+	whileDead = 1,
+	hideOnEscape = 1
+}
+StaticPopupDialogs["BULKMAIL_REMOVE_DESTINATION"] = {
+	text = L["Confirm removal of destination"],
+	button1 = L["Accept"],
+	button2 = L["Cancel"],
+	OnAccept = function()
+		removeConfirmedDest()
+		confirmedDestToRemove = nil
+	end,
+	OnHide = function()
+		confirmedDestToRemove = nil
+	end,
+	timeout = 0,
+	exclusive = 1,
+	hideOnEscape = 1
+}
