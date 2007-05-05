@@ -37,6 +37,7 @@ L:RegisterTranslations("enUS", function() return {
 	["Clear"] = true,
 	["Send"] = true,
 	["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."] = true,
+	["Invalid ItemID"] = true,
 	["AutoSend Rules"] = true,
 	["Include"] = true,
 	["Exclude"] = true,

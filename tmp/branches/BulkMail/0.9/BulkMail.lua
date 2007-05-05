@@ -35,30 +35,17 @@ end
 -- forego checking the autosend list every time a new character is typed.
 local function destCacheBuild()
 	destCache = {}
-	for _, dest in pairs(BulkMail.db.realm.autoSendListItems) do
-		destCache[string.lower(dest)] = true
-	end
-	for _, dest in pairs(autoSendRules) do
+	for dest in pairs(autoSendRules) do
 		destCache[string.lower(dest)] = true
 	end
 end
 
 -- Create a table of PT sets for which the user has autosend destinations.
 local function ptSetsCacheBuild()
-	ptSetsCache = {}
-	for set in pairs(BulkMail.db.realm.autoSendListItems) do
-		if string.match(set, "^pt:") then
-			table.insert(ptSetsCache, string.match(set, "pt:(%w+)"))
-		end
-	end
 end
 
 -- Check if this item is part of a PT autosend set and return its destination.
 local function getPTSendDest(itemID)
-	local sets = pt:ItemInSets(tonumber(itemID), ptSetsCache)
-	if sets then
-		return BulkMail.db.realm.autoSendListItems["pt:"..sets[1]]
-	end
 end
 
 -- Updates the "Postage" field in the Send Mail frame to reflect the total
@@ -204,12 +191,9 @@ function BulkMail:OnInitialize()
 				},
 			},
 		},
+		autoSendListItems = {},
 	})
-	autoSendRules = self.db.realm.autoSendRules
-	-- Converting old 'realm' level defaultDest setting to new 'char' level setting
-	if self.db.realm.defaultDestination and not self.db.char.defaultDestination then
-		self.db.char.defaultDestination = self.db.realm.defaultDestination
-	end
+	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
 
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
 		type = "group",
@@ -598,11 +582,31 @@ end
 --[[--------------------------------------------------------------------------------
   AutoSend Edit GUI
 -----------------------------------------------------------------------------------]]
-local shown = {}
-local showAddRuleMenu -- functions
+local shown = {}  -- keeps track of collapsed/expanded state
+local curRuleSet  -- for adding rules via the dewdrop
+
+dewdrop:Register("BMAddRuleMenu", 'children', {
+	type = 'group',
+	args = {
+		items = {
+			type = 'text', name = "Item", desc = "Item ID(s)",
+			input = true, get = false,
+			usage = "<itemID> [itemID2, ...]",
+			set = function(...)
+				local items = {...}
+				for _, item in ipairs(items) do
+					if GetItemInfo(item) then
+						table.insert(curRuleSet.items, item)
+					end
+				end
+				tablet:Refresh("BMAutoSendEdit")
+			end,
+		}
+	}
+})
 
 local function addNewDest(dest)
-	local _ = autoSendRules[dest]
+	local _ = autoSendRules[dest]  -- trigger the table creation by accessing it
 	tablet:Refresh("BMAutoSendEdit")
 end
 
@@ -612,19 +616,7 @@ local function removeConfirmedDest()
 	tablet:Refresh("BMAutoSendEdit")
 end
 
-local function showAddRuleMenu(ruleset)
-	BulkMail:PrintLiteral(ruleset)
-end
-
-function BulkMail:RegisterAutoSendEditTablet()
-	tablet:Register("BMAutoSendEdit",
-		"children", function() self:FillAutoSendEditTablet() end, "data", {},
-		"cantAttach", true, "clickable", true,
-		"showTitleWhenDetached", true, "showHintWhenDetached", true,
-		"dontHook", true, "strata", "DIALOG")
-end
-
-function BulkMail:FillAutoSendEditTablet()
+local function fillAutoSendEditTablet()
 	local cat
 	tablet:SetTitle(L["AutoSend Rules"])
 	-- categories; one per destination character
@@ -642,7 +634,7 @@ function BulkMail:FillAutoSendEditTablet()
 				end
 				tablet:Refresh("BMAutoSendEdit")
 			end, 'arg1', dest)
-		-- rules list prototype
+		-- rules list prototype; used for listing both include- and exclude rules
 		local function listRules(ruleset)
 			if not ruleset then return end
 			for ruletype, rules in pairs(ruleset) do
@@ -659,21 +651,33 @@ function BulkMail:FillAutoSendEditTablet()
 				end
 			end
 		end
+		-- rules lists; collapsed/expanded by clicking the destination characters' names
 		if shown.dest then
 			-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)
-			cat:AddLine('text', L["Include"], 'indentation', 5, 'func', showAddRuleMenu, 'arg1', rulesets.include) 
+			cat:AddLine('text', L["Include"], 'indentation', 5, 'func', function() curRuleSet = rulesets.include dewdrop:Open("BMAddRuleMenu") end) 
 			listRules(rulesets.include)
 			-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules (not yet implemented)
-			cat:AddLine('text', L["Exclude"], 'indentation', 5, 'func', showAddRuleMenu, 'arg1', rulesets.exclude)
+			cat:AddLine('text', L["Exclude"], 'indentation', 5, 'func', function() curRuleSet = rulesets.exclude dewdrop:Open("BMAddRuleMenu") end) 
 			listRules(rulesets.exclude)
 		end
 	end
 
 	cat = tablet:AddCategory('id', "actions")
 	cat:AddLine('text', L["New Destination"], 'func', function() StaticPopup_Show("BULKMAIL_ADD_DESTINATION") end)
-	cat:AddLine('text', L["Close"], 'func', function() self:ScheduleEvent(function() tablet:Close("BMAutoSendEdit") end, 0.01) end)  -- WTF
+	cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close("BMAutoSendEdit") end, 0.01) end)  -- WTF
 end
 
+function BulkMail:RegisterAutoSendEditTablet()
+	tablet:Register("BMAutoSendEdit",
+		"children", fillAutoSendEditTablet, "data", {},
+		"cantAttach", true, "clickable", true,
+		"showTitleWhenDetached", true, "showHintWhenDetached", true,
+		"dontHook", true, "strata", "DIALOG")
+end
+
+--[[--------------------------------------------------------------------------------
+  StaticPopups
+-----------------------------------------------------------------------------------]]
 StaticPopupDialogs["BULKMAIL_ADD_DESTINATION"] = {
 	text = L["BulkMail - New AutoSend Destination"],
 	button1 = L["Accept"],
