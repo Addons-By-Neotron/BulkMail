@@ -265,6 +265,7 @@ end
 
 function BulkMail:OnEnable()
 	self:RegisterAutoSendEditTablet()
+	self:RegisterAddRuleDewdrop()
 	self:RegisterEvent("MAIL_SHOW")
 	self:RegisterEvent("MAIL_CLOSED")
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -585,25 +586,112 @@ end
 local shown = {}  -- keeps track of collapsed/expanded state
 local curRuleSet  -- for adding rules via the dewdrop
 
-dewdrop:Register("BMAddRuleMenu", 'children', {
-	type = 'group',
-	args = {
-		items = {
-			type = 'text', name = "Item", desc = "Item ID(s)",
-			input = true, get = false,
-			usage = "<itemID> [itemID2, ...]",
-			set = function(...)
-				local items = {...}
-				for _, item in ipairs(items) do
-					if GetItemInfo(item) then
-						table.insert(curRuleSet.items, item)
-					end
+function BulkMail:RegisterAddRuleDewdrop()
+	local itemsAOTable, itemTypesAOTable, pt3setsAOTable
+
+	-- User-specified item IDs
+	itemsAOTable = {
+		type = 'text', name = L["Item"], desc = L["Item ID(s)"],
+		input = true, get = false,
+		usage = "<itemID> [itemID2, ...]",
+		set = function(...)
+			local items = {...}
+			for _, item in ipairs(items) do
+				if GetItemInfo(item) then
+					table.insert(curRuleSet.items, item)
 				end
-				tablet:Refresh("BMAutoSendEdit")
-			end,
-		}
+			end
+			tablet:Refresh("BMAutoSendEdit")
+		end
 	}
-})
+
+	-- Blizzard item types
+	itemTypesAOTable = {type = 'group', name = L["Item Type"], desc = L["Item Type"], args = {}}
+
+	local auctionItemClasses = {GetAuctionItemClasses()}
+	local auctionItemSubClasses = {}
+	for i = 1, #auctionItemClasses do
+		table.insert(auctionItemSubClasses, {GetAuctionItemSubClasses(i)})
+	end
+	for i = 1, #auctionItemClasses do
+		local itype, subtypes = auctionItemClasses[i], auctionItemSubClasses[i]
+		itemTypesAOTable.args[itype] = {
+			type = #subtypes > 0 and 'group' or 'execute', desc = itype,
+			name = #subtypes > 0 and itype or string.format("|cFFBBBBFF%s|r", itype),
+			func = function()
+				itemTypeTable = {type = itype}
+				setmetatable(itemTypeTable, {__tostring = function() return string.format(L["Item Type: %s"], itype) end})
+				table.insert(curRuleSet.itemTypes, itemTypeTable)
+				tablet:Refresh("BMAutoSendEdit")
+			end
+		}
+		if #subtypes > 0 then
+			local supertype = itemTypesAOTable.args[itype]
+			supertype.args = {}
+			supertype.args[itype] = {
+				type = 'execute', desc = string.format(L["Select %s Superset"], supertype.name),
+				name = string.format("|cFFBBBBFF%s|r", itype),
+				func = supertype.func,
+			}
+			for j = 1, #subtypes do
+				local isubtype = subtypes[j]
+				supertype.args[isubtype] = {
+					type = 'execute', name = isubtype, 
+					desc = string.format("%s - %s", itype, isubtype),
+					func = function()
+						itemTypeTable = {type = itype, subtype = isubtype}
+						setmetatable(itemTypeTable, {__tostring = function() return string.format(L["Item Type: %s - %s"], itype, isubtype) end})
+						table.insert(curRuleSet.itemTypes, itemTypeTable)
+						tablet:Refresh("BMAutoSendEdit")
+					end
+				}
+			end
+		end
+	end
+
+	-- PeriodicTable-3.0 Sets
+	local pt3setsAOTable = {
+		type = 'group', name = L["Periodic Table Set"], desc = L["PeriodicTable-3.0 Sets"],
+		args = {}
+	}
+	local sets = pt:getUpgradeData()
+	for setname in pairs(sets) do
+		local workinglvl, oldlvl, oldparent, allowflag = pt3setsAOTable.args
+		for parent in setname:gmatch("([^%.]+)") do
+			allowflag = not workinglvl[parent]
+			if allowflag then
+				workinglvl[parent] = {
+					type = 'group', name = parent, desc = parent, args = {}
+				}
+			end
+			for k, v in pairs(workinglvl) do
+				local kname = k:match("0077ff([^%*]+)")
+				if kname == parent then
+					workinglvl[k] = nil
+				end
+			end
+			oldlvl, oldparent, workinglvl = workinglvl, parent, workinglvl[parent].args
+		end
+		if allowflag then
+			oldlvl[oldparent] = {
+				name = oldlvl[oldparent].name, type = 'execute',
+				func = function()
+					table.insert(curRuleSet.pt3sets, setname)
+					tablet:Refresh("BMAutoSendEdit")
+				end
+			}
+		end
+	end
+
+	dewdrop:Register("BMAddRuleMenu", 'children', {
+		type = 'group',
+		args = {
+			items     = itemsAOTable,
+			itemTypes = itemTypesAOTable,
+			pt3sets   = pt3setsAOTable,
+		}
+	})
+end
 
 local function addNewDest(dest)
 	local _ = autoSendRules[dest]  -- trigger the table creation by accessing it
@@ -640,7 +728,7 @@ local function fillAutoSendEditTablet()
 			for ruletype, rules in pairs(ruleset) do
 				for k, rule in ipairs(rules) do
 					cat:AddLine(
-						'text', ruletype == "items" and select(2, GetItemInfo(rule)) or rule,
+						'text', ruletype == "items" and select(2, GetItemInfo(rule)) or tostring(rule),
 						'indentation', 15,
 						'func', function(ruleset, id)
 							if IsControlKeyDown() then
