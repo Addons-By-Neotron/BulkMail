@@ -20,6 +20,7 @@ lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua
 
 lib\Gratuity-2.0\Gratuity-2.0.lua
 lib\Tablet-2.0\Tablet-2.0.lua
+lib\Dewdrop-2.0\Dewdrop-2.0.lua
 lib\PeriodicTable-3.0\PeriodicTable-3.0.lua
 lib\PeriodicTable-3.0-AllData\PeriodicTable-3.0-AllData.lua
 
