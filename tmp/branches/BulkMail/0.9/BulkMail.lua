@@ -8,8 +8,8 @@ local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = AceLibrary("PeriodicTable-3.0")
 local dewdrop  = AceLibrary("Dewdrop-2.0")
 
---local sendCache, autoSendRules, rulesCache, auctionItemClasses --tables
---local cacheLock, sendDest, numItems --variables
+local sendCache, autoSendRules, rulesCache, auctionItemClasses --tables
+local cacheLock, sendDest, numItems --variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -60,7 +60,7 @@ local function rulesCacheBuild()
 			end
 		end	
 		-- exclude rules
-		for _, itemID in ipairs(rules.exclude.items) do rulesCache[dest][itemID] = nil end
+		for _, itemID in ipairs(rules.exclude.items) do rulesCache[dest][tonumber(itemID)] = nil end
 		for _, set in ipairs(rules.exclude.pt3Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
 		end
