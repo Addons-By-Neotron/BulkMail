@@ -1,3 +1,8 @@
+0.9.0 beta
+- Complete interface and logic overhaul
+ - Now uses a simple rules-based system for autosending.  Currently, three rule types are available: item ID, Blizzard item type/su btype, and PeriodicTable-3.0 sets.  Items corresponding to rules in the 'include' list will be processed first, then rules in the  'exclude' list will be removed to achieve the final ruleset.
+- Use /bm autosend edit to access the autosend rules menu
+
 0.8.0:
 - Code clean-up, optimizations too numerous to count
 - Default destination saved per-character instead of per-realm
