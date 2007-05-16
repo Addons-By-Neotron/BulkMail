@@ -635,7 +635,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 		local pathtable = {}
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
-			if curmenu and not curmenu[cat] then
+			if not curmenu[cat] then
 				local path = table.concat(pathtable, ".")
 				curmenu[cat] = {
 					text = cat,	hasArrow = true, subMenu = {}, 
@@ -647,7 +647,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 			end
 			prevmenu, curmenu = curmenu[cat], curmenu[cat].subMenu
 		end
-		prevmenu.hasArrow, prevmenu.subMenu = nil, nil
+		prevmenu.hasArrow = nil
 	end
 
 	-- Create table for Dewdrop and register
@@ -672,17 +672,17 @@ local function fillAutoSendEditTablet()
 	tablet:SetTitle(L["AutoSend Rules"])
 	-- categories; one per destination character
 	for dest, rulesets in pairs(autoSendRules) do
-		if autoSendRules[dest].user == true then  -- hack to not show implicitly created table entries
+		if autoSendRules[dest].user then  -- hack to not show implicitly created table entries
 			-- category title (destination character's name)
 			cat = tablet:AddCategory(
-				'id', dest, 'text', dest, 'showWithoutChildren', true,
-				'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown.dest and "Minus" or "Plus"),
+				'id', dest, 'text', dest, 'showWithoutChildren', true, 'hideBlankLine', true,
+				'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown[dest] and "Minus" or "Plus"),
 				'func', function(dest)
-					if IsControlKeyDown() then
+					if IsAltKeyDown() then
 						confirmedDestToRemove = dest
 						StaticPopup_Show("BULKMAIL_REMOVE_DESTINATION")
 					else
-						shown.dest = not shown.dest
+						shown[dest] = not shown[dest]
 					end
 					tablet:Refresh("BMAutoSendEdit")
 				end, 'arg1', dest
@@ -729,7 +729,7 @@ local function fillAutoSendEditTablet()
 				end
 			end
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
-			if shown.dest then
+			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)
 				cat:AddLine('text', L["Include"], 'indentation', 5, 'func', function() curRuleSet = rulesets.include dewdrop:Open("BMAddRuleMenu") end) 
 				listRules(rulesets.include)
