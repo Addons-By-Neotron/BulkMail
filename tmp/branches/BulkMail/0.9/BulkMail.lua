@@ -636,7 +636,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 		local pathtable = {}
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
-			if not curmenu[cat] then
+			if curmenu and not curmenu[cat] then
 				local path = table.concat(pathtable, ".")
 				curmenu[cat] = {
 					text = cat,	hasArrow = true, subMenu = {}, 
