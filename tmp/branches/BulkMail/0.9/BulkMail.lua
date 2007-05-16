@@ -693,7 +693,7 @@ local function fillAutoSendEditTablet()
 				for ruletype, rules in pairs(ruleset) do
 					for k, rule in ipairs(rules) do
 						local args = {
-							text = tostring(rule), textR = 1, textG = 1, textB = 1,
+							text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 16,
 							func = function(ruleset, id)
 								if IsAltKeyDown() then
 									table.remove(rules, k)
@@ -713,11 +713,9 @@ local function fillAutoSendEditTablet()
 								args.text = string.format("Item Type: %s", rule.type)
 							end
 							args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
-							args.indentation = 16
 						elseif ruletype == "pt3Sets" then
 							args.text = string.format("PT3 Set: %s", rule)
 							args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
-							args.indentation = 16
 						end
 						local argTable = {}
 						for arg, val in pairs(args) do
