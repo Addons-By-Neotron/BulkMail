@@ -689,11 +689,14 @@ local function fillAutoSendEditTablet()
 			)
 			-- rules list prototype; used for listing both include- and exclude rules
 			local function listRules(ruleset)
-				if not ruleset then return end
+				if not ruleset or not next(ruleset) then
+					cat:AddLine('text', "None", 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
+					return
+				end
 				for ruletype, rules in pairs(ruleset) do
 					for k, rule in ipairs(rules) do
 						local args = {
-							text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 16,
+							text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 20,
 							func = function(ruleset, id)
 								if IsAltKeyDown() then
 									table.remove(rules, k)
@@ -729,11 +732,12 @@ local function fillAutoSendEditTablet()
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
 			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)
-				cat:AddLine('text', L["Include"], 'indentation', 5, 'func', function() curRuleSet = rulesets.include dewdrop:Open("BMAddRuleMenu") end) 
+				cat:AddLine('text', L["Include"], 'indentation', 10, 'func', function() curRuleSet = rulesets.include dewdrop:Open("BMAddRuleMenu") end) 
 				listRules(rulesets.include)
 				-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules (not yet implemented)
-				cat:AddLine('text', L["Exclude"], 'indentation', 5, 'func', function() curRuleSet = rulesets.exclude dewdrop:Open("BMAddRuleMenu") end) 
+				cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', function() curRuleSet = rulesets.exclude dewdrop:Open("BMAddRuleMenu") end) 
 				listRules(rulesets.exclude)
+				cat:AddLine()cat:AddLine()
 			end
 		end
 	end
@@ -741,6 +745,7 @@ local function fillAutoSendEditTablet()
 	cat = tablet:AddCategory('id', "actions")
 	cat:AddLine('text', L["New Destination"], 'func', function() StaticPopup_Show("BULKMAIL_ADD_DESTINATION") end)
 	cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close("BMAutoSendEdit") end, 0.01) end)  -- WTF
+	tablet:SetHint(L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."])
 end
 
 function BulkMail:RegisterAutoSendEditTablet()
