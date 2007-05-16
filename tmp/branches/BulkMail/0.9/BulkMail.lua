@@ -381,10 +381,9 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
 	if IsControlKeyDown() and IsShiftKeyDown() then
 		self:QuickSend(this)
-	end
-	if IsAltKeyDown() then
+	elseif IsAltKeyDown() then
 		sendCacheToggle(this)
-	else
+	elseif not IsShiftKeyDown() then
 		sendCacheRemove(this)
 	end
 end
@@ -610,7 +609,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 	for itype, subtypes in pairs(auctionItemClasses) do
 		itemTypesDDTable.subMenu[itype] = {
 			text = itype, hasArrow = #subtypes > 0, func = function()
-				table.insert(curRuleSet.itemTypes, {type = itype})
+				table.insert(curRuleSet.itemTypes, {type = itype, subtype = itype})
 				tablet:Refresh("BMAutoSendEdit")
 			end
 		}
@@ -696,7 +695,7 @@ local function fillAutoSendEditTablet()
 						local args = {
 							text = tostring(rule), textR = 1, textG = 1, textB = 1,
 							func = function(ruleset, id)
-								if IsControlKeyDown() then
+								if IsAltKeyDown() then
 									table.remove(rules, k)
 									tablet:Refresh("BMAutoSendEdit")
 								end
@@ -708,7 +707,7 @@ local function fillAutoSendEditTablet()
 							args.checked = true
 							args.checkIcon = select(10, GetItemInfo(rule))
 						elseif ruletype == "itemTypes" then
-							if rule.subtype then
+							if rule.subtype ~= rule.type then
 								args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
 							else
 								args.text = string.format("Item Type: %s", rule.type)
