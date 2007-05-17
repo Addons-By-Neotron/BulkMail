@@ -8,8 +8,8 @@ local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = AceLibrary("PeriodicTable-3.0")
 local dewdrop  = AceLibrary("Dewdrop-2.0")
 
-local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
-local cacheLock, sendDest, numItems --variables
+--local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
+--local cacheLock, sendDest, numItems --variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -650,7 +650,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 	for itype, subtypes in pairs(auctionItemClasses) do
 		itemTypesDDTable.subMenu[itype] = {
 			text = itype, hasArrow = #subtypes > 0, func = function()
-				table.insert(curRuleSet.itemTypes, {type = itype, subtype = itype})
+				table.insert(curRuleSet.itemTypes, {type = itype, subtype = #subtypes == 0 and itype})
 				tablet:Refresh("BMAutoSendEdit")
 			end
 		}
