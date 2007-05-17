@@ -204,9 +204,9 @@ local function sendCacheBuild(destination)
 			local target = rulesCacheDest(itemID)
 			if target then
 				if destination == '' then 
-					sendCacheAdd(bag, slot)
+					sendCacheAdd(bag, slot, true)
 				elseif destination == target then
-					sendCacheAdd(bag, slot)
+					sendCacheAdd(bag, slot, true)
 				end
 			end
 		end
