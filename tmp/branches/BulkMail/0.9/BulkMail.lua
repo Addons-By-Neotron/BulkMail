@@ -103,8 +103,8 @@ function rulesCacheDest(item)
 	for dest, rules in pairs(rulesCache) do
 		local canddest
 		if dest ~= UnitName('player') and rules[itemID] or rules[itype] and rules[itype][isubtype] then canddest = dest end
-		if rdest then
-			local xrules = autoSendRules[rdest].exclude
+		if canddest then
+			local xrules = autoSendRules[canddest].exclude
 			for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
 			for _, xset in ipairs(xrules.pt3Sets) do
 				if pt:ItemInSet(itemID, xset) then canddest = nil end
