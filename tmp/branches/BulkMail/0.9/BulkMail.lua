@@ -102,7 +102,7 @@ function rulesCacheDest(item)
 	local itype, isubtype = select(6, GetItemInfo(itemID))
 	for dest, rules in pairs(rulesCache) do
 		local canddest
-		if dest ~= UnitName('player') and rules[itemID] or rules[itype] and rules[itype][isubtype] then canddest = dest end
+		if dest ~= UnitName('player') and (rules[itemID] or rules[itype] and rules[itype][isubtype]) then canddest = dest end
 		if canddest then
 			local xrules = autoSendRules[canddest].exclude
 			for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
