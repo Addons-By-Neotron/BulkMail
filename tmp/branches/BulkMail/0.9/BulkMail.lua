@@ -488,6 +488,7 @@ function BulkMail:Send()
 		return sendCacheRemove(bag, slot)
 	else
 		self:CancelScheduledEvent("BMSendLoop")
+		SendMailNameEditBox:SetText('')
 		return sendCacheCleanup()
 	end
 end
