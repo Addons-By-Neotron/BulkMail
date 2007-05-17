@@ -8,8 +8,8 @@ local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = AceLibrary("PeriodicTable-3.0")
 local dewdrop  = AceLibrary("Dewdrop-2.0")
 
---local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
---local cacheLock, sendDest, numItems --variables
+local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
+local cacheLock, sendDest, numItems --variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -346,7 +346,7 @@ function BulkMail:AddAutoSendRule(...)
 		dest = table.remove(arg, 1)
 	end
 	for i = 1, #arg do  -- cycle through all rules supplied in the commandline
-		local itemID = string.match(arg[i], "item:(%d+)")
+		local itemID = tonumber(string.match(arg[i], "item:(%d+)"))
 		if itemID then
 			table.insert(autoSendRules[dest].include.items, itemID)
 			tablet:Refresh("BMAutoSendEdit")
@@ -484,7 +484,7 @@ function BulkMail:Send()
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
 		if itemLink then
-			SendMailPackageButton:SetID(string.match(itemLink, "item:(%d+):") or 0)
+			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
 		end
 		return sendCacheRemove(bag, slot)
 	else
@@ -630,8 +630,30 @@ local shown = {}  -- keeps track of collapsed/expanded state
 local curRuleSet  -- for adding rules via the dewdrop
 
 function BulkMail:RegisterAddRuleDewdrop()
+	-- Mailable items in bags
+	local bagItemsDDTable = {
+		text = L["Items in Bags"], hasArrow = true, subMenu = {},
+		tooltipTitle = L["Bag Items"], tooltipText = L["Mailable items in your bags."]
+	}
+	local dupeCheck = {}
+	for bag, slot, item in bagIter() do
+		local itemID = tonumber(string.match(item, "item:(%d+)"))
+		if not dupeCheck[itemID] then
+			dupeCheck[itemID] = true
+			gratuity:SetBagItem(bag, slot)
+			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
+				table.insert(bagItemsDDTable.subMenu, {
+					text = select(2, GetItemInfo(itemID)), func = function()
+						table.insert(curRuleSet.items, itemID)
+						tablet:Refresh("BMAutoSendEdit")
+					end
+				})
+			end
+		end
+	end
+
 	-- User-specified item IDs
-	local itemsDDTable = {
+	local itemInputDDTable = {
 		text = L["Item ID"], hasArrow = true, hasEditBox = true,
 		tooltipTitle = L["ItemID(s)"], tooltipText = L["Usage: <itemID> [itemID2, ...]"],
 		editBoxFunc = function(...)
@@ -692,7 +714,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 	end
 
 	-- Create table for Dewdrop and register
-	local ddtable = { {text = L["Add rule"], isTitle = true}, itemsDDTable, itemTypesDDTable, pt3SetsDDTable }
+	local ddtable = { {text = L["Add rule"], isTitle = true}, bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable }
 	dewdrop:Register("BMAddRuleMenu", 'children', function() dewdrop:FeedTable(ddtable) end)
 end
 
