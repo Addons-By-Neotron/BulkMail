@@ -643,7 +643,9 @@ function BulkMail:RegisterAddRuleDewdrop()
 			gratuity:SetBagItem(bag, slot)
 			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
 				table.insert(bagItemsDDTable.subMenu, {
-					text = select(2, GetItemInfo(itemID)), func = function()
+					text = select(2, GetItemInfo(itemID)),
+					checked = true, checkIcon = select(10, GetItemInfo(itemID)),
+					func = function()
 						table.insert(curRuleSet.items, itemID)
 						tablet:Refresh("BMAutoSendEdit")
 					end
