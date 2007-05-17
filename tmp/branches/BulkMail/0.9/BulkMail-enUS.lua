@@ -44,6 +44,8 @@ L:RegisterTranslations("enUS", function() return {
 	["AutoSend Rules"] = true,
 	["Include"] = true,
 	["Exclude"] = true,
+	["Global Exclude"] = true,
+	["Exclude"] = true,
 	["New Destination"] = true,
 	["Close"] = true,
 	["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."] = true,

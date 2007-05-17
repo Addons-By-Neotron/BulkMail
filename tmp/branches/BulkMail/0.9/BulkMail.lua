@@ -8,8 +8,8 @@ local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = AceLibrary("PeriodicTable-3.0")
 local dewdrop  = AceLibrary("Dewdrop-2.0")
 
-local sendCache, autoSendRules, rulesCache, auctionItemClasses --tables
-local cacheLock, sendDest, numItems --variables
+--local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
+--local cacheLock, sendDest, numItems --variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -46,7 +46,7 @@ local function rulesCacheBuild()
 	for dest, rules in pairs(autoSendRules) do
 		rulesCache[dest] = {}
 		-- include rules
-		for _, itemID in ipairs(rules.include.items) do rulesCache[dest][itemID] = true end
+		for _, itemID in ipairs(rules.include.items) do rulesCache[dest][tonumber(itemID)] = true end
 		for _, set in ipairs(rules.include.pt3Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][tonumber(itemID)] = true end
 		end
@@ -61,18 +61,58 @@ local function rulesCacheBuild()
 		end	
 		-- exclude rules
 		for _, itemID in ipairs(rules.exclude.items) do rulesCache[dest][tonumber(itemID)] = nil end
+		for _, itemID in ipairs(globalExclude.items) do rulesCache[dest][tonumber(itemID)] = nil end
+
 		for _, set in ipairs(rules.exclude.pt3Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
 		end
+		for _, set in ipairs(globalExclude.pt3Sets) do
+			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
+		end
+
 		for _, itemTypeTable in ipairs(rules.exclude.itemTypes) do
-			local itype, isubtype = itemTypeTable.type, itemTypeTable.subtype
-			if isubtype and rulesCache[dest][itype] then
-				rulesCache[dest][itype][isubtype] = nil
+			local rtype, rsubtype = itemTypeTable.type, itemTypeTable.subtype
+			if rsubtype ~= rtype and rulesCache[dest][rtype] then
+				rulesCache[dest][rtype][rsubtype] = nil
 			else
-				rulesCache[dest][itype] = nil
+				rulesCache[dest][rtype] = nil
 			end
 		end	
+		for _, itemTypeTable in ipairs(globalExclude.itemTypes) do
+			local rtype, rsubtype = itemTypeTable.type, itemTypeTable.subtype
+			if rsubtype ~= rtype and rulesCache[dest][rtype] then
+				rulesCache[dest][rtype][rsubtype] = nil
+			else
+				rulesCache[dest][rtype] = nil
+			end
+		end
 	end
+end
+
+-- Returns the autosend destination of an itemID, according to the
+-- rulesCache, or nil if no rules for this item are found.
+function rulesCacheDest(item)
+	local rdest
+	local itemID = type(item) == 'number' and item or tonumber(string.match(item, "item:(%d+)"))
+	for _, xID in ipairs(globalExclude.items) do if itemID == xID then return end end
+	for _, xset in ipairs(globalExclude.pt3Sets) do
+		if pt:ItemInSet(itemID, xset) then return end
+	end
+
+	local itype, isubtype = select(6, GetItemInfo(itemID))
+	for dest, rules in pairs(rulesCache) do
+		local canddest
+		if rules[itemID] or rules[itype] and rules[itype][isubtype]	then canddest = dest end
+		if rdest then
+			local xrules = autoSendRules[rdest].exclude
+			for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
+			for _, xset in ipairs(xrules.pt3Sets) do
+				if pt:ItemInSet(itemID, xset) then canddest = nil end
+			end
+		end
+		rdest = canddest or rdest
+	end
+	return rdest
 end
 
 -- Updates the "Postage" field in the Send Mail frame to reflect the total
@@ -87,16 +127,9 @@ local function updateSendCost()
 	else
 		return MoneyFrame_Update("SendMailCostMoneyFrame", GetSendMailPrice())
 	end
-end
-
--- Returns the autosend destination of an itemID, according to the
--- rulesCache, or nil if no rules for this item are found.
-function rulesCacheDest(item)
-	local itemID = type(item) == 'number' and item or string.match(item, "item:(%d+)")
-	local itype, isubtype = select(6, GetItemInfo(itemID))
-	for dest, rules in pairs(rulesCache) do
-		if rules[tonumber(itemID)] or rules[itype] and rules[itype][isubtype] then return dest end
-	end
+		for _, set in ipairs(rules.exclude.pt3Sets) do
+			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
+		end
 end
 
 -- Add a container slot to BulkMail's send queue.
@@ -202,7 +235,12 @@ function BulkMail:OnInitialize()
 		},
 	})
 	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
-
+	self:RegisterDefaults('char', {
+		globalExclude = {
+			['*'] = {}
+		}
+	})
+	globalExclude = self.db.char.globalExclude
 	-- local itemType value association tables
 	auctionItemClasses = {}
 	for i, itype in ipairs({GetAuctionItemClasses()}) do
@@ -414,6 +452,7 @@ end
 
 function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
 	sendCacheBuild(SendMailNameEditBox:GetText())
+	sendDest = SendMailNameEditBox:GetText()
 	return self.hooks[frame].OnTextChanged(a1)
 end
 
@@ -498,7 +537,7 @@ function BulkMail:ShowGUI()
 
 			tablet:SetTitle("BulkMail")
 			
-			local cat = tablet:AddCategory('columns', 1, 'text', L["Items to be sent (Alt-Click to add/remove):"],
+			local cat = tablet:AddCategory('columns', 2, 'text', L["Items to be sent (Alt-Click to add/remove):"],
 				'showWithoutChildren', true, 'child_indentation', 5)
 			
 			if sendCache and next(sendCache) then
@@ -510,7 +549,7 @@ function BulkMail:ShowGUI()
 						if qty and qty > 1 then
 							itemText = string.format("%s(%d)", itemText, qty)
 						end						
-						cat:AddLine('text', itemText,
+						cat:AddLine('text', itemText, 'text2', sendDest == "" and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
 							'checked', true, 'hasCheck', true, 'checkIcon', texture,
 							'func', self.OnItemSelect, 'arg1', self, 'arg2', bag, 'arg3', slot)
 					end
@@ -597,7 +636,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 			local items = {...}
 			for _, item in ipairs(items) do
 				if GetItemInfo(item) then
-					table.insert(curRuleSet.items, item)
+					table.insert(curRuleSet.items, tonumber(item))
 				end
 			end
 			tablet:Refresh("BMAutoSendEdit")
@@ -669,6 +708,49 @@ end
 
 local function fillAutoSendEditTablet()
 	local cat
+	-- rules list prototype; used for listing both include- and exclude rules
+	local function listRules(ruleset)
+		if not ruleset or not next(ruleset) then
+			cat:AddLine('text', "None", 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
+			return
+		end
+		for ruletype, rules in pairs(ruleset) do
+			for k, rule in ipairs(rules) do
+				local args = {
+					text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 20,
+					func = function(ruleset, id)
+						if IsAltKeyDown() then
+							table.remove(rules, k)
+							tablet:Refresh("BMAutoSendEdit")
+						end
+					end, arg1 = rules, arg2 = k,
+				}
+				if ruletype == "items" then
+					args.text = select(2, GetItemInfo(rule))
+					args.hasCheck = true
+					args.checked = true
+					args.checkIcon = select(10, GetItemInfo(rule))
+				elseif ruletype == "itemTypes" then
+					if rule.subtype ~= rule.type then
+						args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
+					else
+						args.text = string.format("Item Type: %s", rule.type)
+					end
+					args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
+				elseif ruletype == "pt3Sets" then
+					args.text = string.format("PT3 Set: %s", rule)
+					args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
+				end
+				local argTable = {}
+				for arg, val in pairs(args) do
+					table.insert(argTable, arg)
+					table.insert(argTable, val)
+				end
+				cat:AddLine(unpack(argTable))
+			end
+		end
+	end
+
 	tablet:SetTitle(L["AutoSend Rules"])
 	-- categories; one per destination character
 	for dest, rulesets in pairs(autoSendRules) do
@@ -687,48 +769,6 @@ local function fillAutoSendEditTablet()
 					tablet:Refresh("BMAutoSendEdit")
 				end, 'arg1', dest
 			)
-			-- rules list prototype; used for listing both include- and exclude rules
-			local function listRules(ruleset)
-				if not ruleset or not next(ruleset) then
-					cat:AddLine('text', "None", 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
-					return
-				end
-				for ruletype, rules in pairs(ruleset) do
-					for k, rule in ipairs(rules) do
-						local args = {
-							text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 20,
-							func = function(ruleset, id)
-								if IsAltKeyDown() then
-									table.remove(rules, k)
-									tablet:Refresh("BMAutoSendEdit")
-								end
-							end, arg1 = rules, arg2 = k,
-						}
-						if ruletype == "items" then
-							args.text = select(2, GetItemInfo(rule))
-							args.hasCheck = true
-							args.checked = true
-							args.checkIcon = select(10, GetItemInfo(rule))
-						elseif ruletype == "itemTypes" then
-							if rule.subtype ~= rule.type then
-								args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
-							else
-								args.text = string.format("Item Type: %s", rule.type)
-							end
-							args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
-						elseif ruletype == "pt3Sets" then
-							args.text = string.format("PT3 Set: %s", rule)
-							args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
-						end
-						local argTable = {}
-						for arg, val in pairs(args) do
-							table.insert(argTable, arg)
-							table.insert(argTable, val)
-						end
-						cat:AddLine(unpack(argTable))
-					end
-				end
-			end
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
 			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)
@@ -740,6 +780,20 @@ local function fillAutoSendEditTablet()
 				cat:AddLine()cat:AddLine()
 			end
 		end
+	end
+
+	-- Global Exclude Rules
+	cat = tablet:AddCategory(
+		'id', "globalExclude", 'text', L["Global Exclude"], 'showWithoutChildren', true, 'hideBlankLine', true,
+		'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown[dest] and "Minus" or "Plus"),
+		'func', function()
+			shown.globalExclude = not shown.globalExclude
+			tablet:Refresh("BMAutoSendEdit")
+		end
+	)
+	if shown.globalExclude then
+		cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', function() curRuleSet = globalExclude dewdrop:Open("BMAddRuleMenu") end)
+		listRules(globalExclude)
 	end
 
 	cat = tablet:AddCategory('id', "actions")
