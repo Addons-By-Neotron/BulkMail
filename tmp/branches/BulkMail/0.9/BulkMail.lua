@@ -8,8 +8,8 @@ local gratuity = AceLibrary("Gratuity-2.0")
 local pt       = AceLibrary("PeriodicTable-3.0")
 local dewdrop  = AceLibrary("Dewdrop-2.0")
 
---local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
---local cacheLock, sendDest, numItems --variables
+local sendCache, autoSendRules, globalExclude, rulesCache, auctionItemClasses --tables
+local cacheLock, sendDest, numItems --variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -732,7 +732,7 @@ local function fillAutoSendEditTablet()
 					args.checked = true
 					args.checkIcon = select(10, GetItemInfo(rule))
 				elseif ruletype == "itemTypes" then
-					if rule.subtype ~= rule.type then
+					if rule.subtype and rule.subtype ~= rule.type then
 						args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
 					else
 						args.text = string.format("Item Type: %s", rule.type)
