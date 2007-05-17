@@ -191,6 +191,7 @@ local function sendCacheCleanup(autoOnly)
 		end
 	end
 	cacheLock = false
+	BulkMail:RefreshGUI()
 end
 
 -- Populate BulkMail's send queue with container slots holding items following
