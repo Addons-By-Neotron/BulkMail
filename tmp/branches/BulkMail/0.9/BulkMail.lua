@@ -453,7 +453,7 @@ end
 
 function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
 	sendCacheBuild(SendMailNameEditBox:GetText())
-	sendDest = SendMailNameEditBox:GetText()
+	sendDest = cacheLock and sendDest or SendMailNameEditBox:GetText()
 	return self.hooks[frame].OnTextChanged(a1)
 end
 
