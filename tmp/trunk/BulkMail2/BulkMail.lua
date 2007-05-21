@@ -216,7 +216,7 @@ end
   Setup
 ------------------------------------------------------------------------------]]
 function BulkMail:OnInitialize()
-	self:RegisterDB('BulkMailDB')
+	self:RegisterDB('BulkMail2DB')
 	self:RegisterDefaults('profile', {
 		tablet_data = { detached = true },
 	})

@@ -1,12 +1,12 @@
-## Interface: 20003
+## Interface: 20100
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made really easy
-## Version: 0.9.0
+## Version: 2.0
 ## Author: hyperactiveChipmunk, Kemayo
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
-## SavedVariables: BulkMailDB
+## SavedVariables: BulkMail2DB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, PeriodicTable-3.0
 
 lib\Ace2\AceLibrary\AceLibrary.lua
@@ -22,7 +22,11 @@ lib\Gratuity-2.0\Gratuity-2.0.lua
 lib\Tablet-2.0\Tablet-2.0.lua
 lib\Dewdrop-2.0\Dewdrop-2.0.lua
 lib\PeriodicTable-3.0\PeriodicTable-3.0.lua
-lib\PeriodicTable-3.0-AllData\PeriodicTable-3.0-AllData.lua
+lib\PeriodicTable-3.0-Consumable\PeriodicTable-3.0-Consumable.lua
+lib\PeriodicTable-3.0-Misc\PeriodicTable-3.0-Misc.lua
+lib\PeriodicTable-3.0-Reputation\PeriodicTable-3.0-Reputation.lua
+lib\PeriodicTable-3.0-Tradeskill\PeriodicTable-3.0-Tradeskill.lua
+lib\PeriodicTable-3.0-TradeskillResultMats\PeriodicTable-3.0-TradeskillResultMats.lua
 
 BulkMail-enUS.lua
 BulkMail.lua
