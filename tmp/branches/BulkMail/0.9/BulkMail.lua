@@ -216,7 +216,7 @@ end
   Setup
 ------------------------------------------------------------------------------]]
 function BulkMail:OnInitialize()
-	self:RegisterDB('BulkMailDB')
+	self:RegisterDB('BulkMail2DB')
 	self:RegisterDefaults('profile', {
 		tablet_data = { detached = true },
 	})
@@ -372,20 +372,20 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 		self:ScheduleRepeatingEvent('BMSendLoop', self.Send, 0.1, self)
 	else
 		this = SendMailMailButton
-		return self.hooks[frame].OnClick(a1)
+		return self.hooks[frame].OnClick(frame, a1)
 	end
 end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
 	self:ShowGUI()
 	sendCacheBuild(SendMailNameEditBox:GetText())
-	return self.hooks[frame].OnClick(a1)
+	return self.hooks[frame].OnClick(frame, a1)
 end
 
 function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
 	sendCacheBuild(SendMailNameEditBox:GetText())
 	sendDest = cacheLock and sendDest or SendMailNameEditBox:GetText()
-	return self.hooks[frame].OnTextChanged(a1)
+	return self.hooks[frame].OnTextChanged(frame, a1)
 end
 
 --[[----------------------------------------------------------------------------
