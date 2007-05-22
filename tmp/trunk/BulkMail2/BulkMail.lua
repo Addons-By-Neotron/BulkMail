@@ -274,7 +274,7 @@ function BulkMail:OnInitialize()
 						name = L["add"], type = 'text', aliases = L["+"],
 						desc = L["Add an item rule by itemlink or PeriodicTable-3.0 set manually."],
 						input = true, set = 'AddAutoSendRule', usage = L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"], get = false,
-						validate = function(arg1) return self.db.char.defaultDestination or not string.match(arg1, "^|[cC]") and not pt:IsSetMulti(arg1) == nil end,
+						validate = function(arg1) return self.db.char.defaultDestination or (not string.match(arg1, "^|[cC]") and not pt:IsSetMulti(arg1) ~= nil) end,
 						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
 					},
 					rmdest = {
@@ -406,24 +406,23 @@ end
 -- it must be the destination; otherwise, defaultDestination is used.
 -- This is the function called by /bm autosend add.
 function BulkMail:AddAutoSendRule(...)
-	local args = {...}
-	local dest
-	if string.match(args[1], "^|[cC]") or pt:IsSetMulti(args[1]) ~= nil then
+	local dest = select(1, ...)
+	local start = 2
+	if string.match(dest, "^|[cC]") or pt:IsSetMulti(dest) ~= nil then
 		dest = self.db.char.defaultDestination  -- first arg is an item or PT set, not a name, so use default (validation that default exists is handled by AceOptions)
-	else
-		dest = table.remove(args, 1)  -- otherwise, the first arg is the destination; pull it out, leaving us with a dest and a clean list of items and PT3 sets
+		start = 1
 	end
 	self:AddDestination(dest)
-	for i = 1, #args do
-		local itemID = tonumber(string.match(args[i], "item:(%d+)"))
+	for i = start, select('#', ...) do
+		local itemID = tonumber(string.match(select(i, ...), "item:(%d+)"))
 		if itemID then  -- is an item link
 			table.insert(autoSendRules[dest].include.items, itemID)
 			tablet:Refresh('BMAutoSendEdit')
-			self:Print("%s - %s", args[i], dest)
-		elseif pt:IsSetMulti(args[i]) ~= nil then  -- is a PT3 set
-			table.insert(autoSendRules[dest].include.pt3Sets, args[i])
+			self:Print("%s - %s", select(i, ...), dest)
+		elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT3 set
+			table.insert(autoSendRules[dest].include.pt3Sets, select(i, ...))
 			tablet:Refresh('BMAutoSendEdit')
-			self:Print("%s - %s", args[i], dest)
+			self:Print("%s - %s", select(i, ...), dest)
 		end
 	end
 end
@@ -604,8 +603,8 @@ local function createStaticARDTables()
 		text = L["Item ID"], hasArrow = true, hasEditBox = true,
 		tooltipTitle = L["ItemID(s)"], tooltipText = L["Usage: <itemID> [itemID2, ...]"],
 		editBoxFunc = function(...)
-			local items = {...}
-			for _, item in ipairs(items) do
+			for i=1, select('#', ...) do
+				local item = select(i, ...)
 				if GetItemInfo(item) then
 					table.insert(curRuleSet.items, tonumber(item))
 				end
