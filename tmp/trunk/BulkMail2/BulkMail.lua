@@ -836,7 +836,8 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 		getglobal(this:GetName().."EditBox"):SetText('')
 	end,
 	EditBoxOnEnterPressed = function()
-		addNewDest(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+		BulkMail:AddDestination(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+		tablet:Refresh('BMAutoSendEdit')
 		this:GetParent():Hide()
 	end,
 	EditBoxOnEscapePressed = function()
