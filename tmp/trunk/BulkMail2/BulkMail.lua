@@ -92,6 +92,7 @@ end
 -- Returns the autosend destination of an itemID, according to the
 -- rulesCache, or nil if no rules for this item are found.
 function rulesCacheDest(item)
+	if not item then return end
 	local rdest
 	local itemID = type(item) == 'number' and item or tonumber(string.match(item, "item:(%d+)"))
 	for _, xID in ipairs(globalExclude.items) do if itemID == xID then return end end
@@ -543,6 +544,9 @@ function BulkMail:ShowGUI()
 				cat:AddLine('text', L["Clear"])
 				cat:AddLine('text', L["Send"])
 			end
+			cat = tablet:AddCategory('columns', 1)
+			cat:AddLine()
+			cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMail') end, 0.01) end)  -- WTF
 		end)
 	end
 	tablet:Open('BulkMail')
