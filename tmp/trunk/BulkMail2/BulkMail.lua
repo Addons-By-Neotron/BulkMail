@@ -306,6 +306,11 @@ function BulkMail:OnEnable()
 	self:RegisterEvent('MAIL_SHOW')
 	self:RegisterEvent('MAIL_CLOSED')
 	self:RegisterEvent('PLAYER_ENTERING_WORLD')
+
+	-- Handle being LoD loaded while at the mailbox
+	if MailFrame:IsVisible() then
+		self:MAIL_SHOW()
+	end
 end
 
 function BulkMail:OnDisable()

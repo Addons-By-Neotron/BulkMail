@@ -8,6 +8,10 @@
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
 ## SavedVariables: BulkMail2DB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, PeriodicTable-3.0
+## LoadManagers: SupplyAndDemand, ForkliftGnome
+## X-S&D-AtMail: true
+## X-LoadOn-Mailbox: true
+## X-LoadOn-Slash: /bulkmail, /bm
 
 lib\Ace2\AceLibrary\AceLibrary.lua
 lib\Ace2\AceOO-2.0\AceOO-2.0.lua
