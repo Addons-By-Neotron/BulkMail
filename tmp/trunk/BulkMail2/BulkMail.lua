@@ -442,7 +442,7 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 
 function BulkMail:UI_ERROR_MESSAGE(msg)  -- move Take All along if inventory is full to prevent infinite loop
 	if msg == ERR_INV_FULL then
-		ibIndex = ibIndex + 1
+		if ibIndex then	ibIndex = ibIndex + 1 end
 		invFull = true
 	end
 end
