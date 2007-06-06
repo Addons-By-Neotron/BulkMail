@@ -78,6 +78,7 @@ L:RegisterTranslations("enUS", function() return {
 	["Take All"] = true,
 	["ta"] = true,
 	["+"] = true,
+	["TTL"] = true,
 	["Usage: <itemID> [itemID2, ...]"] = true,
 	["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."] = true,
 	["Yes"] = true,

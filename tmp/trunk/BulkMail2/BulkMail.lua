@@ -268,16 +268,17 @@ local function ibTake()
 end
 
 -- Build a table with info about all returnable items in the Inbox
-inboxCache = {}  -- table to store info on inbox items
+local inboxCache = {}  -- table to store info on inbox items
 local function inboxCacheBuild()
 	inboxCache = {}
 	for index = 1, GetInboxNumItems() do
-		_, _, sender, _, _, _, _, hasItem, _, wasReturned = GetInboxHeaderInfo(index)
+		_, _, sender, _, _, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(index)
 		if hasItem then
 			inboxCache[index] = {}
 			local ibrindex = inboxCache[index]
 			ibrindex.sender = sender
 			ibrindex.returnable = not wasReturned
+			ibrindex.daysLeft = daysLeft
 			ibrindex.itemLink = GetInboxItemLink(index)
 			_, ibrindex.texture, ibrindex.qty = GetInboxItem(index)
 		end
@@ -792,12 +793,12 @@ function BulkMail:UpdateItemsGUI()
 	if not tablet:IsRegistered('BulkMailInboxItems') then
 		tablet:Register('BulkMailInboxItems', 'detachedData', self.db.profile.tablet_data,
 			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				tablet:SetTitle("BulkMail -- Items")
+				tablet:SetTitle("BulkMail -- Inbox Items")
 				inboxCacheBuild()
-				local cat = tablet:AddCategory('columns', 4, 'text', L["Items (Ctrl-click to return, Shift-click to take)"], 'text2', L["Qty."], 'text3', L["Returnable"], 'text4', L["Sender"], 'child_indentation', 5)
+				local cat = tablet:AddCategory('columns', 5, 'text', L["Items (Ctrl-click to return, Shift-click to take)"], 'text2', L["Qty."], 'text3', L["Returnable"], 'text4', L["Sender"], 'text5', L["TTL"], 'child_indentation', 5)
 				if inboxCache and next(inboxCache) then
 					for index, info in pairs(inboxCache) do
-						cat:AddLine('text', info.itemLink, 'text2', info.qty, 'text3', info.returnable and L["Yes"] or L["No"], 'text4', info.sender,
+						cat:AddLine('text', info.itemLink, 'text2', info.qty, 'text3', info.returnable and L["Yes"] or L["No"], 'text4', info.sender, 'text5', string.format("%0.1f", info.daysLeft),
 							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
 							'func', function() InboxFrame_OnClick(index) BulkMail:RefreshItemsGUI() end
 						)
