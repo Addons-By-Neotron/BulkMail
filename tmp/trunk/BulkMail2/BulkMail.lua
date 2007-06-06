@@ -404,8 +404,8 @@ function BulkMail:OnInitialize()
 						set = function(v) self.db.char.inbox.takeAll = v self:UpdateTakeAllButton() end,
 					},
 					itemsUI = {
-						name = L["Show Returnables"], type = 'toggle', aliases = L["items"],
-						desc = L["Show the Returnables GUI"],
+						name = L["Show Inbox Items"], type = 'toggle', aliases = L["items"],
+						desc = L["Show the Inbox Items GUI"],
 						get = function() return self.db.char.inbox.itemsUI end,
 						set = function(v) self.db.char.inbox.itemsUI = v self:UpdateItemsGUI() end,
 					},
