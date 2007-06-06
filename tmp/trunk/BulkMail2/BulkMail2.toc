@@ -1,8 +1,9 @@
 ## Interface: 20100
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made really easy
-## Version: 2.0
-## Author: hyperactiveChipmunk, Kemayo
+## Version: 2.1
+## Author: hyperactiveChipmunk
+## X-Credits: Kemayo, Kergoth, Bigzero, Tekkub
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
@@ -34,3 +35,4 @@ lib\PeriodicTable-3.0-TradeskillResultMats\PeriodicTable-3.0-TradeskillResultMat
 
 BulkMail-enUS.lua
 BulkMail.lua
+BulkMailInbox.lua

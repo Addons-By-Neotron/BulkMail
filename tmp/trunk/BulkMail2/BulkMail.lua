@@ -8,8 +8,10 @@ local gratuity = AceLibrary('Gratuity-2.0')
 local pt       = AceLibrary('PeriodicTable-3.0')
 local dewdrop  = AceLibrary('Dewdrop-2.0')
 
+local _G = getfenv(0)
+
 local auctionItemClasses, sendCache, destCache, rulesCache, autoSendRules, globalExclude  -- tables
-local cacheLock, sendDest, numItems, confirmedDestToRemove  -- variables
+local cacheLock, sendDest, numItems, confirmedDestToRemove, ibIndex, invFull  -- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -130,6 +132,25 @@ local function updateSendCost()
 	end
 end
 
+--returns the frame associated with bag, slot
+local function GetBagSlotFrame(bag,slot)
+	if bag >= 0 and bag < NUM_CONTAINER_FRAMES and slot > 0 and slot <= MAX_CONTAINER_ITEMS then
+		local bagslots = GetContainerNumSlots(bag)
+		if bagslots > 0 then
+			return getglobal("ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1))
+		end
+	end
+	return
+end
+
+--shades or unshades the given bag slot
+local function ShadeBagSlot(bag,slot,shade)
+	local frame = GetBagSlotFrame(bag,slot)
+	if frame then
+		SetItemButtonDesaturated(frame,shade)
+	end
+end
+
 -- Add a container slot to BulkMail's send queue.
 local function sendCacheAdd(bag, slot, squelch)
 	-- convert to (bag, slot, squelch) if called as (frame, squelch)
@@ -142,6 +163,7 @@ local function sendCacheAdd(bag, slot, squelch)
 		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
 			sendCache[bag] = sendCache[bag] or {}
 			sendCache[bag][slot] = true; numItems = numItems + 1
+			ShadeBagSlot(bag,slot,true)
 			BulkMail:RefreshGUI()
 			SendMailFrame_CanSend()
 		elseif not squelch then
@@ -155,7 +177,11 @@ end
 local function sendCacheRemove(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	if sendCache and sendCache[bag] then
-		if sendCache[bag][slot] then sendCache[bag][slot] = nil; numItems = numItems - 1 end
+		if sendCache[bag][slot] then
+			sendCache[bag][slot] = nil
+			numItems = numItems - 1
+			ShadeBagSlot(bag,slot,false)
+		end
 		if not next(sendCache[bag]) then sendCache[bag] = nil end
 	end
 	BulkMail:RefreshGUI()
@@ -199,8 +225,8 @@ local function sendCacheBuild(dest)
 	if not cacheLock then
 		sendCacheCleanup(true);
 		if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then return BulkMail:RefreshGUI() end  -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
-		for bag, slot, itemID in bagIter() do
-			local target = rulesCacheDest(itemID)
+		for bag, slot, item in bagIter() do
+			local target = rulesCacheDest(item)
 			if target then
 				if dest == '' then 
 					sendCacheAdd(bag, slot, true)
@@ -211,6 +237,34 @@ local function sendCacheBuild(dest)
 		end
 	end
 	BulkMail:RefreshGUI()
+end
+
+-- Take an inbox item or money; ignore COD items and letters.
+-- If no item is taken, increment ibIndex.
+local cleanPass
+local function ibTake()
+	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
+	if not tex2 then
+		if cleanPass then
+			return BulkMail:CancelScheduledEvent("BMTakeLoop")
+		else
+			ibIndex = 1
+			cleanPass = true
+			return
+		end
+	end
+
+	if money > 0 then
+		cleanPass = false
+		return TakeInboxMoney(ibIndex)
+	end
+	
+	if hasItem and COD <= 0 and not invFull then
+		cleanPass = false
+		return TakeInboxItem(ibIndex)
+	end
+	
+	ibIndex = ibIndex + 1  -- if we haven't taken anything this time, then move on
 end
 
 --[[----------------------------------------------------------------------------
@@ -242,7 +296,13 @@ function BulkMail:OnInitialize()
 		isSink = false,
 		globalExclude = {
 			['*'] = {}
-		}
+		},
+		inbox = {
+			altDel = false,
+			ctrlRet = true,
+			shiftTake = true,
+			takeAll = true,
+		},
 	})	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
 	auctionItemClasses = {}  -- local itemType value association table
@@ -296,6 +356,36 @@ function BulkMail:OnInitialize()
 				get = function() return self.db.char.isSink end,
 				set = function(v) self.db.char.isSink = v end,
 			},
+			inbox = {
+				name = L["Inbox"], type = 'group', aliases = L["ib"],
+				desc = L["Inbox Options"],
+				args = {
+					altdel = {
+						name = L["Alt-click Delete"], type = 'toggle', aliases = L["alt"],
+						desc = L["Enable Alt-Click on inbox items to delete them."],
+						get = function() return self.db.char.inbox.altDel end,
+						set = function(v) self.db.char.inbox.altDel = v end,
+					},
+					ctrlret = {
+						name = L["Ctrl-click Return"], type = 'toggle', aliases = L["ctrl"],
+						desc = L["Enable Ctrl-click on inbox items to return them."],
+						get = function() return self.db.char.inbox.ctrlRet end,
+						set = function(v) self.db.char.inbox.ctrlRet = v end,
+					},
+					altdel = {
+						name = L["Shift-click Take"], type = 'toggle', aliases = L["shift"],
+						desc = L["Enable Shift-click on inbox items to take them."],
+						get = function() return self.db.char.inbox.shiftTake end,
+						set = function(v) self.db.char.inbox.shiftTake = v end,
+					},
+					takeall = {
+						name = L["Take All"], type = 'toggle', aliases = L["ta"],
+						desc = L["Enable 'Take All' button in inbox."],
+						get = function() return self.db.char.inbox.takeAll end,
+						set = function(v) self.db.char.inbox.takeAll = v self:CreateTakeAllButton() end,
+					},
+				},
+			},
 		},
 	})
 end
@@ -303,9 +393,11 @@ end
 function BulkMail:OnEnable()
 	self:RegisterAutoSendEditTablet()
 	self:RegisterAddRuleDewdrop()
+	self:CreateTakeAllButton()
 	self:RegisterEvent('MAIL_SHOW')
 	self:RegisterEvent('MAIL_CLOSED')
 	self:RegisterEvent('PLAYER_ENTERING_WORLD')
+	self:RegisterEvent('UI_ERROR_MESSAGE')
 
 	-- Handle being LoD loaded while at the mailbox
 	if MailFrame:IsVisible() then
@@ -330,6 +422,9 @@ function BulkMail:MAIL_SHOW()
 
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
+	self:SecureHook('ContainerFrame_Update')
+	self:SecureHook(GameTooltip, 'SetInboxItem')
+	self:Hook('InboxFrame_OnClick', nil, true)
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
 	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
 	self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
@@ -338,19 +433,19 @@ function BulkMail:MAIL_SHOW()
 end
 
 function BulkMail:MAIL_CLOSED()
+	self:CancelScheduledEvent("BMTakeLoop")
 	self:UnhookAll()
 	sendCacheCleanup()
-	if containerFrames then
-		for bag, slot in pairs(containerFrames) do
-			for _, f in pairs(slot) do
-				if f.SetButtonState then f:SetButtonState('NORMAL', 0) end
-			end
-		end
-	end
-	BulkMail:HideGUI()
+	self:HideGUI()
 end
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
+function BulkMail:UI_ERROR_MESSAGE(msg)  -- move Take All along if inventory is full to prevent infinite loop
+	if msg == ERR_INV_FULL then
+		ibIndex = ibIndex + 1
+		invFull = true
+	end
+end
 --[[----------------------------------------------------------------------------
   Hooks
 ------------------------------------------------------------------------------]]
@@ -369,6 +464,42 @@ function BulkMail:SendMailFrame_CanSend()
 		SendMailMailButton:Enable()
 	end
 	self:RefreshGUI()
+end
+
+function BulkMail:ContainerFrame_Update(...)
+	local frame = ...
+	local bag = tonumber(string.sub(frame:GetName(),15)) - 1
+	if bag and sendCache and sendCache[bag] then
+		for slot, send in pairs(sendCache[bag]) do
+			if send then
+				ShadeBagSlot(bag,slot,true)
+			end
+		end
+	end
+end
+
+function BulkMail:SetInboxItem(tooltip, index, ...)
+	local _, _, _, _, money, COD, _, hasItem, _, wasReturned, _, canReply = GetInboxHeaderInfo(index)
+	if self.db.char.inbox.shiftTake then tooltip:AddLine(L["Shift - Take Item"]) end
+	if wasReturned then 
+		if self.db.char.inbox.altDel then
+			tooltip:AddLine(L["Alt - Delete Mail"])
+		end
+	elseif canReply and self.db.char.inbox.ctrlRet then
+		tooltip:AddLine(L["Ctrl - Return Item"])
+	end
+end
+
+function BulkMail:InboxFrame_OnClick(index, ...)
+	self:CancelScheduledEvent("BMTakeLoop")
+	local _, _, _, _, money, COD, _, hasItem, _, wasReturned, _, canReply = GetInboxHeaderInfo(index)
+ 	if self.db.char.inbox.shiftTake and IsShiftKeyDown() then
+		if money > 0 then TakeInboxMoney(index)
+		elseif COD > 0 then return
+		elseif hasItem then TakeInboxItem(index) end
+	elseif self.db.char.inbox.ctrlRet and IsControlKeyDown() and not wasReturned and canReply then ReturnInboxItem(index)
+	elseif self.db.char.inbox.altDel and IsAltKeyDown() then DeleteInboxItem(index)
+	else return self.hooks.InboxFrame_OnClick(index, ...) end
 end
 
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
@@ -478,7 +609,9 @@ function BulkMail:QuickSend(bag, slot)
 		ClickSendMailItemButton()
 		if GetSendMailItem() then
 			local dest = SendMailNameEditBox:GetText()
-			SendMailNameEditBox:SetText(dest ~= '' and dest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
+			if dest == '' then
+				SendMailNameEditBox:SetText(rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
+			end
 			if SendMailNameEditBox:GetText() ~= '' then
 				this = SendMailMailButton
 				return self.hooks[SendMailMailButton].OnClick()
@@ -493,7 +626,7 @@ function BulkMail:QuickSend(bag, slot)
 end
 
 --[[----------------------------------------------------------------------------
-  Mailbox GUI (original Tablet conversion by Kemayo)
+  Mailbox Send GUI (original Tablet conversion by Kemayo)
 ------------------------------------------------------------------------------]]
 local function getLockedContainerItem()
 	for bag=0, NUM_BAG_SLOTS do
@@ -677,8 +810,8 @@ local function updateDynamicARDTables()
 	}
 	local dupeCheck = {}
 	for bag, slot, item in bagIter() do
-		local itemID = tonumber(string.match(item, "item:(%d+)"))
-		if not dupeCheck[itemID] then
+		local itemID = tonumber(string.match(item or '', "item:(%d+)"))
+		if itemID and not dupeCheck[itemID] then
 			dupeCheck[itemID] = true
 			gratuity:SetBagItem(bag, slot)
 			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
@@ -821,6 +954,28 @@ function BulkMail:RegisterAutoSendEditTablet()
 		'showTitleWhenDetached', true, 'showHintWhenDetached', true,
 		'dontHook', true, 'strata', "DIALOG"
 	)
+end
+
+--[[----------------------------------------------------------------------------
+  TakeAll button
+------------------------------------------------------------------------------]]
+function BulkMail:CreateTakeAllButton()
+	if self.db.char.inbox.takeAll then
+		if _G.BMTakeAllButton then return end
+		local BMTakeAllButton = CreateFrame("Button", "BMTakeAllButton", InboxFrame, "UIPanelButtonTemplate")
+		BMTakeAllButton:SetWidth(120)
+		BMTakeAllButton:SetHeight(25)
+		BMTakeAllButton:SetPoint("CENTER", InboxFrame, "TOP", -15, -410)
+		BMTakeAllButton:SetText("Take All")
+		BMTakeAllButton:SetScript("OnClick", function()
+			ibIndex = 1
+			invFull = false
+			BulkMail:ScheduleRepeatingEvent("BMTakeLoop", ibTake, 0.1)
+		end)
+	else
+		if _G.BMTakeAllButton then _G.BMTakeAllButton:Hide() end
+		_G.BMTakeAllButton = nil
+	end
 end
 
 --[[----------------------------------------------------------------------------

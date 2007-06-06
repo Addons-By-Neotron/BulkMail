@@ -1,3 +1,10 @@
+2.1
+- Added several inbox functions (options under /bm inbox).
+- Inbox icon clicks: Shift-click to take item, Ctrl-click to return item, Alt-click (disabled by default) to delete mail.
+- Inbox Take All button: Takes all money and non-COD items (as inventory space permits) from your inbox
+- Load-on-demand patch from Kergoth implemented
+- Container frame desaturation patch from Bigzero implemented
+
 2.0
 - Complete interface and logic overhaul
  - Now uses a simple rules-based system for autosending.  Currently, three rule types are available: item ID, Blizzard item type/su btype, and PeriodicTable-3.0 sets.  Items corresponding to rules in the 'include' list will be processed first, then rules in the  'exclude' list will be removed to achieve the final ruleset.
