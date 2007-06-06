@@ -268,15 +268,16 @@ local function ibTake()
 end
 
 -- Build a table with info about all returnable items in the Inbox
-returnCache = {}  -- table to store info on returnables
-local function returnCacheBuild()
-	returnCache = {}
+inboxCache = {}  -- table to store info on inbox items
+local function inboxCacheBuild()
+	inboxCache = {}
 	for index = 1, GetInboxNumItems() do
 		_, _, sender, _, _, _, _, hasItem, _, wasReturned = GetInboxHeaderInfo(index)
-		if hasItem and not wasReturned then
-			returnCache[index] = {}
-			local ibrindex = returnCache[index]
+		if hasItem then
+			inboxCache[index] = {}
+			local ibrindex = inboxCache[index]
 			ibrindex.sender = sender
+			ibrindex.returnable = not wasReturned
 			ibrindex.itemLink = GetInboxItemLink(index)
 			_, ibrindex.texture, ibrindex.qty = GetInboxItem(index)
 		end
@@ -318,7 +319,7 @@ function BulkMail:OnInitialize()
 			ctrlRet = true,
 			shiftTake = true,
 			takeAll = true,
-			returnables = true,
+			itemsUI = true,
 		},
 	})	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
@@ -401,11 +402,11 @@ function BulkMail:OnInitialize()
 						get = function() return self.db.char.inbox.takeAll end,
 						set = function(v) self.db.char.inbox.takeAll = v self:UpdateTakeAllButton() end,
 					},
-					returnables = {
-						name = L["Show Returnables"], type = 'toggle', aliases = L["rets"],
+					itemsUI = {
+						name = L["Show Returnables"], type = 'toggle', aliases = L["items"],
 						desc = L["Show the Returnables GUI"],
-						get = function() return self.db.char.inbox.returnables end,
-						set = function(v) self.db.char.inbox.returnables = v self:UpdateReturnGUI() end,
+						get = function() return self.db.char.inbox.itemsUI end,
+						set = function(v) self.db.char.inbox.itemsUI = v self:UpdateItemsGUI() end,
 					},
 				},
 			},
@@ -446,7 +447,7 @@ function BulkMail:MAIL_SHOW()
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
-	self:SecureHook('CheckInbox', 'RefreshReturnGUI')
+	self:SecureHook('CheckInbox', 'RefreshItemsGUI')
 	self:SecureHook(GameTooltip, 'SetInboxItem')
 	self:Hook('InboxFrame_OnClick', nil, true)
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
@@ -455,7 +456,7 @@ function BulkMail:MAIL_SHOW()
 	self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
 
 	SendMailMailButton:Enable()
-	self:ScheduleEvent(function() BulkMail:UpdateReturnGUI() end, 0.5)
+	self:ScheduleEvent(function() BulkMail:UpdateItemsGUI() end, 0.5)
 end
 
 function BulkMail:MAIL_CLOSED()
@@ -463,7 +464,7 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookAll()
 	sendCacheCleanup()
 	self:HideSendQueueGUI()
-	self:HideReturnGUI()
+	self:HideItemsGUI()
 end
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
@@ -542,12 +543,12 @@ end
 
 function BulkMail:MailFrameTab1_OnClick(frame, a1)
 	self:HideSendQueueGUI()
-	self:UpdateReturnGUI()
+	self:UpdateItemsGUI()
 	return self.hooks[frame].OnClick(a1)
 end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
-	self:HideReturnGUI()
+	self:HideItemsGUI()
 	self:ShowSendQueueGUI()
 	sendCacheBuild(SendMailNameEditBox:GetText())
 	return self.hooks[frame].OnClick(a1)
@@ -785,47 +786,50 @@ function BulkMail:UpdateTakeAllButton()
 	end
 end
 
--- Return Mail GUI
-function BulkMail:UpdateReturnGUI()
-	if not self.db.char.inbox.returnables then return self:HideReturnGUI() end
-	if not tablet:IsRegistered('BulkMailReturnables') then
-		tablet:Register('BulkMailReturnables', 'detachedData', self.db.profile.tablet_data,
+-- Inbox Items GUI
+function BulkMail:UpdateItemsGUI()
+	if not self.db.char.inbox.itemsUI then return self:HideItemsGUI() end
+	if not tablet:IsRegistered('BulkMailInboxItems') then
+		tablet:Register('BulkMailInboxItems', 'detachedData', self.db.profile.tablet_data,
 			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				tablet:SetTitle("BulkMail -- Returnables")
-				returnCacheBuild()
-				local cat = tablet:AddCategory('columns', 2, 'text', L["Returnable Items (Click to return):"], 'showWithoutChildren', true, 'child_indentation', 5)
-				if returnCache and next(returnCache) then
-					for index, info in pairs(returnCache) do
+				tablet:SetTitle("BulkMail -- Items")
+				inboxCacheBuild()
+				local cat = tablet:AddCategory('columns', 2, 'text', L["Items (Ctrl-click to return (*-items only), Shift-click to take):"], 'child_indentation', 5)
+				if inboxCache and next(inboxCache) then
+					for index, info in pairs(inboxCache) do
 						local itemText = info.itemLink
-						if info.qty and info.qty > 1 then
-							itemText = string.format("%s(%d)", itemText, info.qty)
-						end						
+						if info.qty and info.qty > 1 then itemText = string.format("%s (%d)", itemText, info.qty) end						
+						if info.returnable then	itemText = string.format("%s *", itemText) end
 						cat:AddLine('text', itemText, 'text2', info.sender,
 							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
-							'func', function() ReturnInboxItem(index) BulkMail:RefreshReturnGUI() end
+							'func', function() InboxFrame_OnClick(index) BulkMail:RefreshItemsGUI() end
 						)
 					end
 				else
-					cat:AddLine('text', L["No returnable items"])
+					cat:AddLine('text', L["No items"])
 				end
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
-				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMailReturnables') end, 0.01) end)  -- WTF
+				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMailInboxItems') end, 0.01) end)  -- WTF
 			end
 		)
 	end
-	tablet:Open('BulkMailReturnables')
+	tablet:Open('BulkMailInboxItems')
 end
 
-function BulkMail:HideReturnGUI()
-	if tablet:IsRegistered('BulkMailReturnables') then
-		tablet:Close('BulkMailReturnables')
+function BulkMail:HideItemsGUI()
+	if tablet:IsRegistered('BulkMailInboxItems') then
+		tablet:Close('BulkMailInboxItems')
 	end
 end
 
-function BulkMail:RefreshReturnGUI()
-	if tablet:IsRegistered('BulkMailReturnables') then
-		self:ScheduleEvent(function() tablet:Refresh('BulkMailReturnables') end, 0.25)
+function BulkMail:RefreshItemsGUI()
+	if tablet:IsRegistered('BulkMailInboxItems') then
+		if IsShiftKeyDown() then
+			self:ScheduleEvent(function() tablet:Refresh('BulkMailInboxItems') end, 0.5)
+		else
+			self:ScheduleEvent(function() tablet:Refresh('BulkMailInboxItems') end, 0.25)
+		end
 	end
 end
 
