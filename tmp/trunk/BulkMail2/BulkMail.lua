@@ -794,13 +794,10 @@ function BulkMail:UpdateItemsGUI()
 			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
 				tablet:SetTitle("BulkMail -- Items")
 				inboxCacheBuild()
-				local cat = tablet:AddCategory('columns', 2, 'text', L["Items (Ctrl-click to return (*-items only), Shift-click to take):"], 'child_indentation', 5)
+				local cat = tablet:AddCategory('columns', 4, 'text', L["Items (Ctrl-click to return, Shift-click to take)"], 'text2', L["Qty."], 'text3', L["Returnable"], 'text4', L["Sender"], 'child_indentation', 5)
 				if inboxCache and next(inboxCache) then
 					for index, info in pairs(inboxCache) do
-						local itemText = info.itemLink
-						if info.qty and info.qty > 1 then itemText = string.format("%s (%d)", itemText, info.qty) end						
-						if info.returnable then	itemText = string.format("%s *", itemText) end
-						cat:AddLine('text', itemText, 'text2', info.sender,
+						cat:AddLine('text', info.itemLink, 'text2', info.qty, 'text3', info.returnable and L["Yes"] or L["No"], 'text4', info.sender,
 							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
 							'func', function() InboxFrame_OnClick(index) BulkMail:RefreshItemsGUI() end
 						)
