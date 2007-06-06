@@ -164,7 +164,7 @@ local function sendCacheAdd(bag, slot, squelch)
 			sendCache[bag] = sendCache[bag] or {}
 			sendCache[bag][slot] = true; numItems = numItems + 1
 			ShadeBagSlot(bag,slot,true)
-			BulkMail:RefreshGUI()
+			BulkMail:RefreshSendQueueGUI()
 			SendMailFrame_CanSend()
 		elseif not squelch then
 			BulkMail:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
@@ -184,7 +184,7 @@ local function sendCacheRemove(bag, slot)
 		end
 		if not next(sendCache[bag]) then sendCache[bag] = nil end
 	end
-	BulkMail:RefreshGUI()
+	BulkMail:RefreshSendQueueGUI()
 	updateSendCost()
 	SendMailFrame_CanSend()
 end
@@ -215,7 +215,7 @@ local function sendCacheCleanup(autoOnly)
 		end
 	end
 	cacheLock = false
-	BulkMail:RefreshGUI()
+	BulkMail:RefreshSendQueueGUI()
 end
 
 -- Populate BulkMail's send queue with container slots holding items following
@@ -224,7 +224,7 @@ end
 local function sendCacheBuild(dest)
 	if not cacheLock then
 		sendCacheCleanup(true);
-		if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then return BulkMail:RefreshGUI() end  -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
+		if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then return BulkMail:RefreshSendQueueGUI() end  -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
 		for bag, slot, item in bagIter() do
 			local target = rulesCacheDest(item)
 			if target then
@@ -236,7 +236,7 @@ local function sendCacheBuild(dest)
 			end
 		end
 	end
-	BulkMail:RefreshGUI()
+	BulkMail:RefreshSendQueueGUI()
 end
 
 -- Take an inbox item or money; ignore COD items and letters.
@@ -265,6 +265,22 @@ local function ibTake()
 	end
 	
 	ibIndex = ibIndex + 1  -- if we haven't taken anything this time, then move on
+end
+
+-- Build a table with info about all returnable items in the Inbox
+returnCache = {}  -- table to store info on returnables
+local function returnCacheBuild()
+	returnCache = {}
+	for index = 1, GetInboxNumItems() do
+		_, _, sender, _, _, _, _, hasItem, _, wasReturned = GetInboxHeaderInfo(index)
+		if hasItem and not wasReturned then
+			returnCache[index] = {}
+			local ibrindex = returnCache[index]
+			ibrindex.sender = sender
+			ibrindex.itemLink = GetInboxItemLink(index)
+			_, ibrindex.texture, ibrindex.qty = GetInboxItem(index)
+		end
+	end
 end
 
 --[[----------------------------------------------------------------------------
@@ -302,6 +318,7 @@ function BulkMail:OnInitialize()
 			ctrlRet = true,
 			shiftTake = true,
 			takeAll = true,
+			returnables = true,
 		},
 	})	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
@@ -382,7 +399,13 @@ function BulkMail:OnInitialize()
 						name = L["Take All"], type = 'toggle', aliases = L["ta"],
 						desc = L["Enable 'Take All' button in inbox."],
 						get = function() return self.db.char.inbox.takeAll end,
-						set = function(v) self.db.char.inbox.takeAll = v self:CreateTakeAllButton() end,
+						set = function(v) self.db.char.inbox.takeAll = v self:UpdateTakeAllButton() end,
+					},
+					returnables = {
+						name = L["Show Returnables"], type = 'toggle', aliases = L["rets"],
+						desc = L["Show the Returnables GUI"],
+						get = function() return self.db.char.inbox.returnables end,
+						set = function(v) self.db.char.inbox.returnables = v self:UpdateReturnGUI() end,
 					},
 				},
 			},
@@ -393,7 +416,7 @@ end
 function BulkMail:OnEnable()
 	self:RegisterAutoSendEditTablet()
 	self:RegisterAddRuleDewdrop()
-	self:CreateTakeAllButton()
+	self:UpdateTakeAllButton()
 	self:RegisterEvent('MAIL_SHOW')
 	self:RegisterEvent('MAIL_CLOSED')
 	self:RegisterEvent('PLAYER_ENTERING_WORLD')
@@ -423,20 +446,24 @@ function BulkMail:MAIL_SHOW()
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
+	self:SecureHook('CheckInbox', 'RefreshReturnGUI')
 	self:SecureHook(GameTooltip, 'SetInboxItem')
 	self:Hook('InboxFrame_OnClick', nil, true)
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
+	self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
 	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
 	self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
 
 	SendMailMailButton:Enable()
+	self:ScheduleEvent(function() BulkMail:UpdateReturnGUI() end, 0.5)
 end
 
 function BulkMail:MAIL_CLOSED()
 	self:CancelScheduledEvent("BMTakeLoop")
 	self:UnhookAll()
 	sendCacheCleanup()
-	self:HideGUI()
+	self:HideSendQueueGUI()
+	self:HideReturnGUI()
 end
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
@@ -463,7 +490,7 @@ function BulkMail:SendMailFrame_CanSend()
 	if (sendCache and next(sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
 	end
-	self:RefreshGUI()
+	self:RefreshSendQueueGUI()
 end
 
 function BulkMail:ContainerFrame_Update(...)
@@ -513,8 +540,15 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 	end
 end
 
+function BulkMail:MailFrameTab1_OnClick(frame, a1)
+	self:HideSendQueueGUI()
+	self:UpdateReturnGUI()
+	return self.hooks[frame].OnClick(a1)
+end
+
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
-	self:ShowGUI()
+	self:HideReturnGUI()
+	self:ShowSendQueueGUI()
 	sendCacheBuild(SendMailNameEditBox:GetText())
 	return self.hooks[frame].OnClick(a1)
 end
@@ -626,7 +660,7 @@ function BulkMail:QuickSend(bag, slot)
 end
 
 --[[----------------------------------------------------------------------------
-  Mailbox Send GUI (original Tablet conversion by Kemayo)
+  Mailbox SendQueue GUI (original Tablet conversion by Kemayo)
 ------------------------------------------------------------------------------]]
 local function getLockedContainerItem()
 	for bag=0, NUM_BAG_SLOTS do
@@ -638,71 +672,7 @@ local function getLockedContainerItem()
 	end
 end
 
-function BulkMail:ShowGUI()
-	if not tablet:IsRegistered('BulkMail') then
-		tablet:Register('BulkMail', "detachedData", self.db.profile.tablet_data,
-			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-
-			tablet:SetTitle("BulkMail")
-			
-			local cat = tablet:AddCategory('columns', 2, 'text', L["Items to be sent (Alt-Click to add/remove):"],
-				'showWithoutChildren', true, 'child_indentation', 5)
-			
-			if sendCache and next(sendCache) then
-				for bag, slots in pairs(sendCache) do
-					for slot in pairs(slots) do
-						local itemLink = GetContainerItemLink(bag, slot)
-						local itemText = itemLink and GetItemInfo(itemLink)
-						local texture, qty = GetContainerItemInfo(bag, slot)
-						if qty and qty > 1 then
-							itemText = string.format("%s(%d)", itemText, qty)
-						end						
-						cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
-							'checked', true, 'hasCheck', true, 'checkIcon', texture,
-							'func', self.OnItemSelect, 'arg1', self, 'arg2', bag, 'arg3', slot)
-					end
-				end
-			else
-				cat:AddLine('text', L["No items selected"])
-			end
-			
-			cat = tablet:AddCategory('columns', 1)
-			cat:AddLine('text', L["Drop items here for Sending"], 'justify', "CENTER", 'func', self.OnDropClick, 'arg1', self)
-			
-			if sendCache and next(sendCache) then
-				cat = tablet:AddCategory('columns', 1)
-				cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup, 'arg1')
-				if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
-					cat:AddLine('text', L["Send"], 'func', self.OnSendClick, 'arg1', self)
-				else
-					cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
-				end
-			else
-				cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
-				cat:AddLine('text', L["Clear"])
-				cat:AddLine('text', L["Send"])
-			end
-			cat = tablet:AddCategory('columns', 1)
-			cat:AddLine()
-			cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMail') end, 0.01) end)  -- WTF
-		end)
-	end
-	tablet:Open('BulkMail')
-end
-
-function BulkMail:HideGUI()
-	if tablet:IsRegistered('BulkMail') then
-		tablet:Close('BulkMail')
-	end
-end
-
-function BulkMail:RefreshGUI()
-	if tablet:IsRegistered('BulkMail') then
-		tablet:Refresh('BulkMail')
-	end
-end
-
-function BulkMail:OnItemSelect(bag, slot)
+local function onSendQueueItemSelect(bag, slot)
 	if bag and slot and arg1 == 'LeftButton' then
 		if IsAltKeyDown() then
 			sendCacheToggle(bag, slot)
@@ -716,20 +686,147 @@ function BulkMail:OnItemSelect(bag, slot)
 	end
 end
 
-function BulkMail:OnSendClick()
-	if not sendCache then return end
-	self:SendMailMailButton_OnClick()
-end
-
-function BulkMail:OnDropClick()
+local function onDropClick()
 	if GetSendMailItem() then
-		self:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
+		BulkMail:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
 	end
 	if CursorHasItem() and getLockedContainerItem() then
 		sendCacheAdd(getLockedContainerItem())
 		PickupContainerItem(getLockedContainerItem())  -- clears the cursor
 	end
-	self:RefreshGUI()
+	BulkMail:RefreshSendQueueGUI()
+end
+
+function BulkMail:ShowSendQueueGUI()
+	if not tablet:IsRegistered('BulkMailSendQueue') then
+		tablet:Register('BulkMailSendQueue', 'detachedData', self.db.profile.tablet_data,
+			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
+				tablet:SetTitle("BulkMail Send Queue")
+				
+				local cat = tablet:AddCategory('columns', 2, 'text', L["Items to be sent (Alt-Click to add/remove):"],
+					'showWithoutChildren', true, 'child_indentation', 5)
+				
+				if sendCache and next(sendCache) then
+					for bag, slots in pairs(sendCache) do
+						for slot in pairs(slots) do
+							local itemLink = GetContainerItemLink(bag, slot)
+							local itemText = itemLink and GetItemInfo(itemLink)
+							local texture, qty = GetContainerItemInfo(bag, slot)
+							if qty and qty > 1 then
+								itemText = string.format("%s(%d)", itemText, qty)
+							end						
+							cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
+								'checked', true, 'hasCheck', true, 'checkIcon', texture,
+								'func', onSendQueueItemSelect, 'arg1', bag, 'arg2', slot
+							)
+						end
+					end
+				else
+					cat:AddLine('text', L["No items selected"])
+				end
+				
+				cat = tablet:AddCategory('columns', 1)
+				cat:AddLine('text', L["Drop items here for Sending"], 'justify', "CENTER", 'func', onDropClick)
+				
+				if sendCache and next(sendCache) then
+					cat = tablet:AddCategory('columns', 1)
+					cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup, 'arg1')
+					if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
+						cat:AddLine('text', L["Send"], 'func', function() if sendCache then BulkMail:SendMailMailButton_OnClick() end end)
+					else
+						cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
+					end
+				else
+					cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
+					cat:AddLine('text', L["Clear"])
+					cat:AddLine('text', L["Send"])
+				end
+				cat = tablet:AddCategory('columns', 1)
+				cat:AddLine()
+				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMailSendQueue') end, 0.01) end)  -- WTF
+			end
+		)
+	end
+	tablet:Open('BulkMailSendQueue')
+end
+
+function BulkMail:HideSendQueueGUI()
+	if tablet:IsRegistered('BulkMailSendQueue') then
+		tablet:Close('BulkMailSendQueue')
+	end
+end
+
+function BulkMail:RefreshSendQueueGUI()
+	if tablet:IsRegistered('BulkMailSendQueue') then
+		tablet:Refresh('BulkMailSendQueue')
+	end
+end
+
+--[[----------------------------------------------------------------------------
+  Inbox GUI
+------------------------------------------------------------------------------]]
+-- Update/Create the Take All button
+function BulkMail:UpdateTakeAllButton()
+	if self.db.char.inbox.takeAll then
+		if _G.BMTakeAllButton then return end
+		local BMTakeAllButton = CreateFrame("Button", "BMTakeAllButton", InboxFrame, "UIPanelButtonTemplate")
+		BMTakeAllButton:SetWidth(120)
+		BMTakeAllButton:SetHeight(25)
+		BMTakeAllButton:SetPoint("CENTER", InboxFrame, "TOP", -15, -410)
+		BMTakeAllButton:SetText("Take All")
+		BMTakeAllButton:SetScript("OnClick", function()
+			ibIndex = 1
+			invFull = false
+			BulkMail:ScheduleRepeatingEvent("BMTakeLoop", ibTake, 0.1)
+		end)
+	else
+		if _G.BMTakeAllButton then _G.BMTakeAllButton:Hide() end
+		_G.BMTakeAllButton = nil
+	end
+end
+
+-- Return Mail GUI
+function BulkMail:UpdateReturnGUI()
+	if not self.db.char.inbox.returnables then return self:HideReturnGUI() end
+	if not tablet:IsRegistered('BulkMailReturnables') then
+		tablet:Register('BulkMailReturnables', 'detachedData', self.db.profile.tablet_data,
+			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
+				tablet:SetTitle("BulkMail -- Returnables")
+				returnCacheBuild()
+				local cat = tablet:AddCategory('columns', 2, 'text', L["Returnable Items (Click to return):"], 'showWithoutChildren', true, 'child_indentation', 5)
+				if returnCache and next(returnCache) then
+					for index, info in pairs(returnCache) do
+						local itemText = info.itemLink
+						if info.qty and info.qty > 1 then
+							itemText = string.format("%s(%d)", itemText, info.qty)
+						end						
+						cat:AddLine('text', itemText, 'text2', info.sender,
+							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
+							'func', function() ReturnInboxItem(index) BulkMail:RefreshReturnGUI() end
+						)
+					end
+				else
+					cat:AddLine('text', L["No returnable items"])
+				end
+				cat = tablet:AddCategory('columns', 1)
+				cat:AddLine()
+				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMailReturnables') end, 0.01) end)  -- WTF
+			end
+		)
+	end
+	tablet:Open('BulkMailReturnables')
+end
+
+function BulkMail:HideReturnGUI()
+	if tablet:IsRegistered('BulkMailReturnables') then
+		tablet:Close('BulkMailReturnables')
+	end
+end
+
+function BulkMail:RefreshReturnGUI()
+	if tablet:IsRegistered('BulkMailReturnables') then
+		self:ScheduleEvent(function() tablet:Refresh('BulkMailReturnables') end, 0.25)
+	end
 end
 
 --[[----------------------------------------------------------------------------
@@ -954,28 +1051,6 @@ function BulkMail:RegisterAutoSendEditTablet()
 		'showTitleWhenDetached', true, 'showHintWhenDetached', true,
 		'dontHook', true, 'strata', "DIALOG"
 	)
-end
-
---[[----------------------------------------------------------------------------
-  TakeAll button
-------------------------------------------------------------------------------]]
-function BulkMail:CreateTakeAllButton()
-	if self.db.char.inbox.takeAll then
-		if _G.BMTakeAllButton then return end
-		local BMTakeAllButton = CreateFrame("Button", "BMTakeAllButton", InboxFrame, "UIPanelButtonTemplate")
-		BMTakeAllButton:SetWidth(120)
-		BMTakeAllButton:SetHeight(25)
-		BMTakeAllButton:SetPoint("CENTER", InboxFrame, "TOP", -15, -410)
-		BMTakeAllButton:SetText("Take All")
-		BMTakeAllButton:SetScript("OnClick", function()
-			ibIndex = 1
-			invFull = false
-			BulkMail:ScheduleRepeatingEvent("BMTakeLoop", ibTake, 0.1)
-		end)
-	else
-		if _G.BMTakeAllButton then _G.BMTakeAllButton:Hide() end
-		_G.BMTakeAllButton = nil
-	end
 end
 
 --[[----------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 - Added several inbox functions (options under /bm inbox).
 - Inbox icon clicks: Shift-click to take item, Ctrl-click to return item, Alt-click (disabled by default) to delete mail.
 - Inbox Take All button: Takes all money and non-COD items (as inventory space permits) from your inbox
+- Returnables interface added
 - Load-on-demand patch from Kergoth implemented
 - Container frame desaturation patch from Bigzero implemented
 
