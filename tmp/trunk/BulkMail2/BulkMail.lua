@@ -11,7 +11,7 @@ local dewdrop  = AceLibrary('Dewdrop-2.0')
 local _G = getfenv(0)
 
 local auctionItemClasses, sendCache, destCache, rulesCache, autoSendRules, globalExclude  -- tables
-local cacheLock, sendDest, numItems, confirmedDestToRemove, ibIndex, invFull  -- variables
+local cacheLock, sendDest, numItems, confirmedDestToRemove, ibIndex, ibChanged, invFull  -- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -242,7 +242,7 @@ end
 -- Take an inbox item or money; ignore COD items and letters.
 -- If no item is taken, increment ibIndex.
 local cleanPass
-local function ibTake()
+local function ibTake(onlyMoney)
 	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
 	if not tex2 then
 		if cleanPass then
@@ -259,30 +259,30 @@ local function ibTake()
 		return TakeInboxMoney(ibIndex)
 	end
 	
-	if hasItem and COD <= 0 and not invFull then
+	if not onlyMoney and hasItem and COD <= 0 and not invFull then
 		cleanPass = false
 		return TakeInboxItem(ibIndex)
 	end
 	
 	ibIndex = ibIndex + 1  -- if we haven't taken anything this time, then move on
+	ibChanged = GetTime()
 end
 
 -- Build a table with info about all returnable items in the Inbox
 local inboxCache = {}  -- table to store info on inbox items
 local function inboxCacheBuild()
 	inboxCache = {}
-	for index = 1, GetInboxNumItems() do
-		_, _, sender, _, _, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(index)
-		if hasItem then
-			inboxCache[index] = {}
-			local ibrindex = inboxCache[index]
-			ibrindex.sender = sender
-			ibrindex.returnable = not wasReturned
-			ibrindex.daysLeft = daysLeft
-			ibrindex.itemLink = GetInboxItemLink(index)
-			_, ibrindex.texture, ibrindex.qty = GetInboxItem(index)
+	for i = 1, GetInboxNumItems() do
+		_, _, sender, _, money, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
+		if hasItem or money > 0 then
+			table.insert(inboxCache, {
+				index = i, sender = sender, returnable = not wasReturned,
+				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money,
+				texture = select(2, GetInboxItem(i)), qty = select(3, GetInboxItem(i)),
+			})
 		end
 	end
+	table.sort(inboxCache, function(a,b) if a and b and a.itemLink < b.itemLink then return true end end)
 end
 
 --[[----------------------------------------------------------------------------
@@ -320,7 +320,7 @@ function BulkMail:OnInitialize()
 			ctrlRet = true,
 			shiftTake = true,
 			takeAll = true,
-			itemsUI = true,
+			inboxUI = true,
 		},
 	})	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
@@ -403,11 +403,11 @@ function BulkMail:OnInitialize()
 						get = function() return self.db.char.inbox.takeAll end,
 						set = function(v) self.db.char.inbox.takeAll = v self:UpdateTakeAllButton() end,
 					},
-					itemsUI = {
+					inboxUI = {
 						name = L["Show Inbox Items"], type = 'toggle', aliases = L["items"],
 						desc = L["Show the Inbox Items GUI"],
-						get = function() return self.db.char.inbox.itemsUI end,
-						set = function(v) self.db.char.inbox.itemsUI = v self:UpdateItemsGUI() end,
+						get = function() return self.db.char.inbox.inboxUI end,
+						set = function(v) self.db.char.inbox.inboxUI = v self:UpdateInboxGUI() end,
 					},
 				},
 			},
@@ -448,7 +448,7 @@ function BulkMail:MAIL_SHOW()
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
-	self:SecureHook('CheckInbox', 'RefreshItemsGUI')
+	self:SecureHook('CheckInbox', 'RefreshInboxGUI')
 	self:SecureHook(GameTooltip, 'SetInboxItem')
 	self:Hook('InboxFrame_OnClick', nil, true)
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
@@ -457,7 +457,8 @@ function BulkMail:MAIL_SHOW()
 	self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
 
 	SendMailMailButton:Enable()
-	self:ScheduleEvent(function() BulkMail:UpdateItemsGUI() end, 0.5)
+	ibChanged = GetTime()
+	self:UpdateInboxGUI()
 end
 
 function BulkMail:MAIL_CLOSED()
@@ -465,7 +466,7 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookAll()
 	sendCacheCleanup()
 	self:HideSendQueueGUI()
-	self:HideItemsGUI()
+	self:HideInboxGUI()
 end
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
@@ -529,6 +530,7 @@ function BulkMail:InboxFrame_OnClick(index, ...)
 	elseif self.db.char.inbox.ctrlRet and IsControlKeyDown() and not wasReturned and canReply then ReturnInboxItem(index)
 	elseif self.db.char.inbox.altDel and IsAltKeyDown() then DeleteInboxItem(index)
 	else return self.hooks.InboxFrame_OnClick(index, ...) end
+	ibChanged = GetTime()
 end
 
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
@@ -544,12 +546,12 @@ end
 
 function BulkMail:MailFrameTab1_OnClick(frame, a1)
 	self:HideSendQueueGUI()
-	self:UpdateItemsGUI()
+	self:UpdateInboxGUI()
 	return self.hooks[frame].OnClick(a1)
 end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
-	self:HideItemsGUI()
+	self:HideInboxGUI()
 	self:ShowSendQueueGUI()
 	sendCacheBuild(SendMailNameEditBox:GetText())
 	return self.hooks[frame].OnClick(a1)
@@ -767,6 +769,12 @@ end
 --[[----------------------------------------------------------------------------
   Inbox GUI
 ------------------------------------------------------------------------------]]
+local function takeAll(onlyMoney)
+	ibIndex = 1
+	invFull = false
+	BulkMail:ScheduleRepeatingEvent("BMTakeLoop", ibTake, 0.1, onlyMoney == true)
+end
+
 -- Update/Create the Take All button
 function BulkMail:UpdateTakeAllButton()
 	if self.db.char.inbox.takeAll then
@@ -776,11 +784,7 @@ function BulkMail:UpdateTakeAllButton()
 		BMTakeAllButton:SetHeight(25)
 		BMTakeAllButton:SetPoint("CENTER", InboxFrame, "TOP", -15, -410)
 		BMTakeAllButton:SetText("Take All")
-		BMTakeAllButton:SetScript("OnClick", function()
-			ibIndex = 1
-			invFull = false
-			BulkMail:ScheduleRepeatingEvent("BMTakeLoop", ibTake, 0.1)
-		end)
+		BMTakeAllButton:SetScript("OnClick", takeAll)
 	else
 		if _G.BMTakeAllButton then _G.BMTakeAllButton:Hide() end
 		_G.BMTakeAllButton = nil
@@ -788,19 +792,32 @@ function BulkMail:UpdateTakeAllButton()
 end
 
 -- Inbox Items GUI
-function BulkMail:UpdateItemsGUI()
-	if not self.db.char.inbox.itemsUI then return self:HideItemsGUI() end
+function BulkMail:UpdateInboxGUI()
+	if not self.db.char.inbox.inboxUI then return self:HideInboxGUI() end
 	if not tablet:IsRegistered('BulkMailInboxItems') then
 		tablet:Register('BulkMailInboxItems', 'detachedData', self.db.profile.tablet_data,
 			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				tablet:SetTitle("BulkMail -- Inbox Items")
+				tablet:SetTitle(L["BulkMail -- Inbox Items"])
 				inboxCacheBuild()
-				local cat = tablet:AddCategory('columns', 5, 'text', L["Items (Ctrl-click to return, Shift-click to take)"], 'text2', L["Qty."], 'text3', L["Returnable"], 'text4', L["Sender"], 'text5', L["TTL"], 'child_indentation', 5)
+				local cat = tablet:AddCategory('columns', 6, 'child_indentation', 5,
+					'text', L["Items (Ctrl-click to return, Shift-click to take)"],
+					'text2', L["Qty."],
+					'text3', L["Money"],
+					'text4', L["Returnable"],
+					'text5', L["Sender"],
+					'text6', L["TTL"]
+				)
 				if inboxCache and next(inboxCache) then
-					for index, info in pairs(inboxCache) do
-						cat:AddLine('text', info.itemLink, 'text2', info.qty, 'text3', info.returnable and L["Yes"] or L["No"], 'text4', info.sender, 'text5', string.format("%0.1f", info.daysLeft),
+					for i, info in pairs(inboxCache) do
+						cat:AddLine(
 							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
-							'func', function() InboxFrame_OnClick(index) BulkMail:RefreshItemsGUI() end
+							'func', function() InboxFrame_OnClick(info.index) end,
+							'text', info.itemLink,
+							'text2', info.qty,
+							'text3', string.format("%0.02fg", info.money/10000),
+							'text4', info.returnable and L["Yes"] or L["No"],
+							'text5', info.sender,
+							'text6', string.format("%0.1f", info.daysLeft)
 						)
 					end
 				else
@@ -808,26 +825,27 @@ function BulkMail:UpdateItemsGUI()
 				end
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
+				cat:AddLine('text', L["Take All"], 'func', takeAll)
+				cat:AddLine('text', L["Take Cash"], 'func', takeAll, 'arg1', true)
 				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BulkMailInboxItems') end, 0.01) end)  -- WTF
 			end
 		)
 	end
 	tablet:Open('BulkMailInboxItems')
+	self:ScheduleRepeatingEvent('InboxGUIEvent', self.RefreshInboxGUI, 0.5, self)
 end
 
-function BulkMail:HideItemsGUI()
+function BulkMail:HideInboxGUI()
 	if tablet:IsRegistered('BulkMailInboxItems') then
 		tablet:Close('BulkMailInboxItems')
 	end
+	self:CancelScheduledEvent('InboxGUIEvent')
 end
 
-function BulkMail:RefreshItemsGUI()
+function BulkMail:RefreshInboxGUI()
+	if GetTime() - ibChanged > 2.5 then return end
 	if tablet:IsRegistered('BulkMailInboxItems') then
-		if IsShiftKeyDown() then
-			self:ScheduleEvent(function() tablet:Refresh('BulkMailInboxItems') end, 0.5)
-		else
-			self:ScheduleEvent(function() tablet:Refresh('BulkMailInboxItems') end, 0.25)
-		end
+		tablet:Refresh('BulkMailInboxItems')
 	end
 end
 
