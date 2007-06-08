@@ -8,41 +8,11 @@ local tablet   = AceLibrary('Tablet-2.0')
 local _G = getfenv(0)
 
 local sortFields  -- tables
-local ibIndex, ibChanged, invFull  -- variables
+local ibIndex, ibChanged, cleanPass  -- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
 ------------------------------------------------------------------------------]]
--- Take an inbox item or money; ignore COD items and letters.
--- If no item is taken, increment ibIndex.
-local cleanPass
-local function ibTake(onlyMoney)
-	CheckInbox()
-	local numItems = GetInboxNumItems()
-	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
-	if not tex2 then
-		if cleanPass or numItems == 0 then
-			return BulkMailInbox:CancelScheduledEvent("BMI_TakeLoopEvent")
-		else
-			ibIndex = numItems
-			cleanPass = true
-		end
-	end
-
-	if money > 0 then
-		cleanPass = false
-		TakeInboxMoney(ibIndex)
-	end
-	
-	if not onlyMoney and hasItem and COD <= 0 and not invFull then
-		cleanPass = false
-		TakeInboxItem(ibIndex)
-	end
-	
-	ibIndex = ibIndex - 1
-	ibChanged = GetTime()
-end
-
 -- Build a table with info about all returnable items in the Inbox
 local inboxCache = {}  -- table to store info on inbox items
 local function inboxCacheBuild()
@@ -65,6 +35,13 @@ local function inboxCacheBuild()
 			if a[sf] > b[sf] then return true end
 		end
 	end)
+end
+
+local function takeAll(cash)
+	cashOnly = cash
+	ibIndex = GetInboxNumItems()
+	BulkMailInbox:RegisterEvent('MAIL_INBOX_UPDATE')
+	BulkMailInbox:MAIL_INBOX_UPDATE()
 end
 
 --[[----------------------------------------------------------------------------
@@ -166,9 +143,41 @@ BulkMailInbox.PLAYER_ENTERING_WORLD = BulkMailInbox.MAIL_CLOSED  -- MAIL_CLOSED 
 
 function BulkMailInbox:UI_ERROR_MESSAGE(msg)  -- move Take All along if inventory is full to prevent infinite loop
 	if msg == ERR_INV_FULL then
-		if ibIndex then	ibIndex = ibIndex + 1 end
-		invFull = true
+		cashOnly = true  -- keep parsing for cash, but no more room for items
 	end
+end
+
+-- Take next inbox item or money; skip past COD items and letters.
+function BulkMailInbox:MAIL_INBOX_UPDATE()
+	local numItems = GetInboxNumItems()
+	if ibIndex <= 0 then
+		if cleanPass or numItems <= 0 then
+			return BulkMailInbox:UnregisterEvent('MAIL_INBOX_UPDATE')
+		else
+			ibIndex = numItems
+			cleanPass = true
+			return takeAll(cashOnly)
+		end
+	end
+	
+	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
+	if not tex2 or hasItem and COD > 0 then
+		ibIndex = ibIndex - 1
+		return self:MAIL_INBOX_UPDATE()
+	end
+
+	if money > 0 then
+		cleanPass = false
+		TakeInboxMoney(ibIndex)
+	end
+	
+	if not cashOnly and hasItem then
+		cleanPass = false
+		TakeInboxItem(ibIndex)
+	end
+	
+	ibIndex = ibIndex - 1
+	ibChanged = GetTime()
 end
 
 --[[----------------------------------------------------------------------------
@@ -187,7 +196,7 @@ function BulkMailInbox:SetInboxItem(tooltip, index, ...)
 end
 
 function BulkMailInbox:InboxFrame_OnClick(index, ...)
-	self:CancelScheduledEvent("BMI_TakeLoopEvent")
+	if self:IsEventRegistered('MAIL_INBOX_UPDATE') then self:UnregisterEvent('MAIL_INBOX_UPDATE') end
 	local _, _, _, _, money, COD, _, hasItem, _, wasReturned, _, canReply = GetInboxHeaderInfo(index)
  	if self.db.char.shiftTake and IsShiftKeyDown() then
 		if money > 0 then TakeInboxMoney(index)
@@ -212,12 +221,6 @@ end
 --[[----------------------------------------------------------------------------
   Inbox GUI
 ------------------------------------------------------------------------------]]
-local function takeAll(onlyMoney)
-	ibIndex = 1
-	invFull = false
-	BulkMailInbox:ScheduleRepeatingEvent("BMI_TakeLoopEvent", ibTake, 0.1, onlyMoney == true)
-end
-
 -- Update/Create the Take All button
 function BulkMailInbox:UpdateTakeAllButton()
 	if self.db.char.takeAll then
