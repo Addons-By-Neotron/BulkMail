@@ -17,28 +17,29 @@ local ibIndex, ibChanged, invFull  -- variables
 -- If no item is taken, increment ibIndex.
 local cleanPass
 local function ibTake(onlyMoney)
+	CheckInbox()
+	local numItems = GetInboxNumItems()
 	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
 	if not tex2 then
-		if cleanPass then
+		if cleanPass or numItems == 0 then
 			return BulkMailInbox:CancelScheduledEvent("BMI_TakeLoopEvent")
 		else
-			ibIndex = 1
+			ibIndex = numItems
 			cleanPass = true
-			return
 		end
 	end
 
 	if money > 0 then
 		cleanPass = false
-		return TakeInboxMoney(ibIndex)
+		TakeInboxMoney(ibIndex)
 	end
 	
 	if not onlyMoney and hasItem and COD <= 0 and not invFull then
 		cleanPass = false
-		return TakeInboxItem(ibIndex)
+		TakeInboxItem(ibIndex)
 	end
 	
-	ibIndex = ibIndex + 1  -- if we haven't taken anything this time, then move on
+	ibIndex = ibIndex - 1
 	ibChanged = GetTime()
 end
 
@@ -151,6 +152,7 @@ function BulkMailInbox:MAIL_SHOW()
 	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
 
 	SendMailMailButton:Enable()
+	ibIndex = GetInboxNumItems()
 	ibChanged = GetTime()
 	self:UpdateInboxGUI()
 end
