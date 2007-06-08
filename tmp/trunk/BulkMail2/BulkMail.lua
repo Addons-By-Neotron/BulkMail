@@ -10,7 +10,7 @@ local dewdrop  = AceLibrary('Dewdrop-2.0')
 
 local _G = getfenv(0)
 
-local auctionItemClasses, sendCache, destCache, rulesCache, autoSendRules, globalExclude  -- tables
+local auctionItemClasses, sendCache, destCache, rulesCache, autoSendRules, globalExclude, sortFields  -- tables
 local cacheLock, sendDest, numItems, confirmedDestToRemove, ibIndex, ibChanged, invFull  -- variables
 
 --[[----------------------------------------------------------------------------
@@ -282,7 +282,14 @@ local function inboxCacheBuild()
 			})
 		end
 	end
-	table.sort(inboxCache, function(a,b) if a and b and a.itemLink < b.itemLink then return true end end)
+	table.sort(inboxCache, function(a,b)
+		local sf = sortFields[BulkMail.db.char.sortField]
+		if a and b then
+			a[sf] = type(a[sf]) == 'boolean' and tostring(a[sf]) or a[sf]
+			b[sf] = type(b[sf]) == 'boolean' and tostring(b[sf]) or b[sf]
+			if a[sf] > b[sf] then return true end
+		end
+	end)
 end
 
 --[[----------------------------------------------------------------------------
@@ -304,7 +311,9 @@ function BulkMail:OnInitialize()
 				},
 			},
 		},
-	})	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
+	})
+	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
+	
 	destCache = {}  -- destinations for which we have rules (or are going to add rules)
 	for dest in pairs(autoSendRules) do
 		destCache[dest] = true
@@ -312,9 +321,6 @@ function BulkMail:OnInitialize()
 
 	self:RegisterDefaults('char', {
 		isSink = false,
-		globalExclude = {
-			['*'] = {}
-		},
 		inbox = {
 			altDel = false,
 			ctrlRet = true,
@@ -322,7 +328,12 @@ function BulkMail:OnInitialize()
 			takeAll = true,
 			inboxUI = true,
 		},
-	})	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
+		sortField = 1,
+		globalExclude = {
+			['*'] = {}
+		},
+	})
+	globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
 	auctionItemClasses = {}  -- local itemType value association table
 	for i, itype in ipairs({GetAuctionItemClasses()}) do
@@ -330,6 +341,8 @@ function BulkMail:OnInitialize()
 	end
 
 	numItems = 0
+
+	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
 
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
 		type = 'group',
@@ -800,6 +813,7 @@ function BulkMail:UpdateInboxGUI()
 				tablet:SetTitle(L["BulkMail -- Inbox Items"])
 				inboxCacheBuild()
 				local cat = tablet:AddCategory('columns', 6, 'child_indentation', 5,
+					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 end,
 					'text', L["Items (Ctrl-click to return, Shift-click to take)"],
 					'text2', L["Qty."],
 					'text3', L["Money"],
