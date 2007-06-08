@@ -404,7 +404,7 @@ function BulkMail:OnInitialize()
 						get = function() return self.db.char.inbox.ctrlRet end,
 						set = function(v) self.db.char.inbox.ctrlRet = v end,
 					},
-					altdel = {
+					shifttake = {
 						name = L["Shift-click Take"], type = 'toggle', aliases = L["shift"],
 						desc = L["Enable Shift-click on inbox items to take them."],
 						get = function() return self.db.char.inbox.shiftTake end,
