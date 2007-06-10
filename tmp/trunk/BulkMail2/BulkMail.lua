@@ -398,7 +398,7 @@ end
 
 function BulkMail:ContainerFrame_Update(...)
 	local frame = ...
-	if not frame then return end
+	if not frame or not frame.GetName then return end
 	local bag = tonumber(string.sub(frame:GetName(),15)) - 1
 	if bag and sendCache and sendCache[bag] then
 		for slot, send in pairs(sendCache[bag]) do
