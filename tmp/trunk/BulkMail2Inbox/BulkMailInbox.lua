@@ -8,7 +8,7 @@ local tablet   = AceLibrary('Tablet-2.0')
 local _G = getfenv(0)
 
 local sortFields  -- tables
-local ibIndex, ibChanged, cleanPass  -- variables
+local ibIndex, ibChanged, cleanPass, cashOnly  -- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -135,7 +135,7 @@ function BulkMailInbox:MAIL_SHOW()
 end
 
 function BulkMailInbox:MAIL_CLOSED()
-	self:CancelScheduledEvent("BMI_TakeLoopEvent")
+	if self:IsEventRegistered('MAIL_INBOX_UPDATE') then self:UnregisterEvent('MAIL_INBOX_UPDATE') end
 	self:UnhookAll()
 	self:HideInboxGUI()
 end
@@ -160,24 +160,24 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		end
 	end
 	
-	local _, tex2, _, _, money, COD, _, hasItem = GetInboxHeaderInfo(ibIndex)
-	if not tex2 or hasItem and COD > 0 then
-		ibIndex = ibIndex - 1
-		return self:MAIL_INBOX_UPDATE()
-	end
+	local money, COD, _, hasItem = select(5, GetInboxHeaderInfo(ibIndex))
 
 	if money > 0 then
 		cleanPass = false
-		TakeInboxMoney(ibIndex)
+		ibChanged = GetTime()
+		return TakeInboxMoney(ibIndex)
 	end
 	
-	if not cashOnly and hasItem then
+	if not hasItem or cashOnly or COD > 0 then
+		ibIndex = ibIndex - 1
+		return self:MAIL_INBOX_UPDATE()
+	else
 		cleanPass = false
-		TakeInboxItem(ibIndex)
+		ibChanged = GetTime()
+		ibIndex = ibIndex - 1
+		TakeInboxItem(ibIndex+1)
 	end
 	
-	ibIndex = ibIndex - 1
-	ibChanged = GetTime()
 end
 
 --[[----------------------------------------------------------------------------
@@ -243,16 +243,18 @@ function BulkMailInbox:UpdateInboxGUI()
 	if not tablet:IsRegistered('BMI_InboxTablet') then
 		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data,
 			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				tablet:SetTitle(L["BulkMailInbox -- Inbox Items"])
+				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d)"], GetInboxNumItems()))
 				inboxCacheBuild()
+				local hlText = 'text'..self.db.char.sortField
 				local cat = tablet:AddCategory('columns', 6, 'child_indentation', 5,
 					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 end,
-					'text', L["Items (Ctrl-click to return, Shift-click to take)"],
+					'text', L["Items (Inbox click actions apply)"],
 					'text2', L["Qty."],
 					'text3', L["Money"],
 					'text4', L["Returnable"],
 					'text5', L["Sender"],
-					'text6', L["TTL"]
+					'text6', L["TTL"],
+					hlText..'R', 1, hlText..'G', 0.8, hlText..'B', 0
 				)
 				if inboxCache and next(inboxCache) then
 					for i, info in pairs(inboxCache) do
@@ -264,7 +266,8 @@ function BulkMailInbox:UpdateInboxGUI()
 							'text3', string.format("%0.02fg", info.money/10000),
 							'text4', info.returnable and L["Yes"] or L["No"],
 							'text5', info.sender,
-							'text6', string.format("%0.1f", info.daysLeft)
+							'text6', string.format("%0.1f", info.daysLeft),
+							hlText..'R', 1, hlText..'G', 1, hlText..'B', 1
 						)
 					end
 				else
@@ -273,7 +276,7 @@ function BulkMailInbox:UpdateInboxGUI()
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
 				cat:AddLine('text', L["Take All"], 'func', takeAll)
-				cat:AddLine('text', L["Take Cash"], 'func', takeAll, 'arg1', true)
+				cat:AddLine('text', L["Take Cash"], 'func', function() takeAll(true) end)
 				cat:AddLine('text', L["Close"], 'func', function() BulkMailInbox:ScheduleEvent(function() tablet:Close('BMI_InboxTablet') end, 0.01) end)  -- WTF
 			end
 		)
