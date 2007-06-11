@@ -245,7 +245,7 @@ end
 function BulkMail:OnInitialize()
 	self:RegisterDB('BulkMail2DB')
 	self:RegisterDefaults('profile', {
-		tablet_data = { detached = true },
+		tablet_data = { detached = true, anchor = "TOPLEFT" },
 	})
 	self:RegisterDefaults('realm', {
 		autoSendRules = {
@@ -578,7 +578,7 @@ end
 function BulkMail:ShowSendQueueGUI()
 	if not tablet:IsRegistered('BM_SendQueueTablet') then
 		tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data,
-			'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
+			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
 				tablet:SetTitle("BulkMail Send Queue")
 				
 				local cat = tablet:AddCategory('columns', 2, 'text', L["Items to be sent (Alt-Click to add/remove):"],
