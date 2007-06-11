@@ -517,8 +517,12 @@ end
 function BulkMail:QuickSend(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	if bag and slot then
+		local itemLink = GetContainerItemLink(bag, slot)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
+		if itemLink then
+			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
+		end
 		if GetSendMailItem() then
 			local dest = SendMailNameEditBox:GetText()
 			if dest == '' then
