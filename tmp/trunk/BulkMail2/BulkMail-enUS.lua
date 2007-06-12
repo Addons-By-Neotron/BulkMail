@@ -14,6 +14,7 @@ L:RegisterTranslations("enUS", function() return {
 	["BulkMail - New AutoSend Destination"] = true,
 	["Cancel"] = true,
 	["Cannot determine the item clicked."] = true,
+	["Cash: %0.02fg"] = true,
 	["Clear all rules for this realm."] = true,
 	["clear"] = true,
 	["Clear"] = true,

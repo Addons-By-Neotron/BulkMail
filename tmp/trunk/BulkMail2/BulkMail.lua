@@ -361,6 +361,7 @@ function BulkMail:MAIL_SHOW()
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
+	self:SecureHook('MoneyInputFrame_OnTextChanged', SendMailFrame_CanSend)
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
 	self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
 	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
@@ -390,7 +391,7 @@ function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifie
 end
 
 function BulkMail:SendMailFrame_CanSend()
-	if (sendCache and next(sendCache)) or GetSendMailItem() then
+	if sendCache and next(sendCache) or GetSendMailItem() or SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) > 0 then
 		SendMailMailButton:Enable()
 		SendMailCODButton:Enable()
 	end
@@ -417,6 +418,9 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 	if GetSendMailItem() or sendCache and next(sendCache) then
 		self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self, cod)
 	else
+		if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' then
+			SendMailSubjectEditBox:SetText(string.format(L["Cash: %0.02fg"], MoneyInputFrame_GetCopper(SendMailMoney)/10000))
+		end
 		this = SendMailMailButton
 		return self.hooks[frame].OnClick(frame, a1)
 	end
