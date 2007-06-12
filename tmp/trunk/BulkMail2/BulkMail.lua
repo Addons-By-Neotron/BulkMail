@@ -392,6 +392,7 @@ end
 function BulkMail:SendMailFrame_CanSend()
 	if (sendCache and next(sendCache)) or GetSendMailItem() then
 		SendMailMailButton:Enable()
+		SendMailCODButton:Enable()
 	end
 	self:RefreshSendQueueGUI()
 end
@@ -412,8 +413,9 @@ end
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
 	cacheLock = true
 	sendDest = SendMailNameEditBox:GetText()
+	local cod = SendMailCODButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney)
 	if GetSendMailItem() or sendCache and next(sendCache) then
-		self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self)
+		self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self, cod)
 	else
 		this = SendMailMailButton
 		return self.hooks[frame].OnClick(frame, a1)
@@ -479,7 +481,8 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
-function BulkMail:Send()
+function BulkMail:Send(cod)
+	if StaticPopup_Visible('SEND_MONEY') then return end
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
@@ -496,11 +499,15 @@ function BulkMail:Send()
 	if sendCache and next(sendCache) then
 		local bag, slot = next(sendCache)
 		slot = next(slot)
-		local itemLink = GetContainerItemLink(bag, slot)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
+		local itemLink = GetContainerItemLink(bag, slot)
 		if itemLink then
 			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
+		end
+		if cod then
+			SendMailSendMoneyButton:SetChecked(nil)
+			MoneyInputFrame_SetCopper(SendMailMoney, cod)
 		end
 		return sendCacheRemove(bag, slot)
 	else
