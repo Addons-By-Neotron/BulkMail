@@ -247,6 +247,8 @@ function BulkMail:OnInitialize()
 	self:RegisterDefaults('profile', {
 		tablet_data = { detached = true, anchor = "TOPLEFT" },
 	})
+	self.db.profile.tablet_data.detached = true
+	self.db.profile.tablet_data.anchor = "TOPLEFT"
 	self:RegisterDefaults('realm', {
 		autoSendRules = {
 			['*'] = {
@@ -280,8 +282,8 @@ function BulkMail:OnInitialize()
 	end
 
 	numItems = 0
-
-	self:RegisterChatCommand({"/bulkmail", "/bm"}, {
+	
+	self.opts = {
 		type = 'group',
 		args = {
 			defaultdest = {
@@ -326,7 +328,8 @@ function BulkMail:OnInitialize()
 				set = function(v) self.db.char.isSink = v end,
 			},
 		},
-	})
+	}
+	self:RegisterChatCommand({"/bulkmail", "/bm"}, self.opts)
 end
 
 function BulkMail:OnEnable()

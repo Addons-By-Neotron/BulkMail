@@ -8,7 +8,8 @@
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
 ## SavedVariables: BulkMail2DB
-## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, PeriodicTable-3.0
+## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, FuBar, FuBarPlugin-2.0, PeriodicTable-3.0
+## X-Embeds: Ace2, TabletLib, DewdropLib, GratuityLib, FuBarPlugin-2.0, PeriodicTable-3.0
 ## LoadManagers: SupplyAndDemand, ForkliftGnome
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
@@ -23,9 +24,11 @@ lib\Ace2\AceDB-2.0\AceDB-2.0.lua
 lib\Ace2\AceConsole-2.0\AceConsole-2.0.lua
 lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua
 
-lib\Gratuity-2.0\Gratuity-2.0.lua
 lib\Tablet-2.0\Tablet-2.0.lua
 lib\Dewdrop-2.0\Dewdrop-2.0.lua
+lib\Gratuity-2.0\Gratuity-2.0.lua
+lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
+
 lib\PeriodicTable-3.0\PeriodicTable-3.0.lua
 lib\PeriodicTable-3.0-Consumable\PeriodicTable-3.0-Consumable.lua
 lib\PeriodicTable-3.0-Misc\PeriodicTable-3.0-Misc.lua
@@ -35,4 +38,4 @@ lib\PeriodicTable-3.0-TradeskillResultMats\PeriodicTable-3.0-TradeskillResultMat
 
 BulkMail-enUS.lua
 BulkMail.lua
-BulkMailInbox.lua
+BulkMailFu.lua
