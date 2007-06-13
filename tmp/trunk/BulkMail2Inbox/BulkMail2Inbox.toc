@@ -6,8 +6,9 @@
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
-## SavedVariables: BulkMail2InboxDB
-## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib
+## SavedVariables: BulkMail2InboxDB, BulkMail2DB
+## OptionalDeps: Ace2, TabletLib, DewdropLib, FuBar, FuBarPlugin-2.0, BulkMail2
+## X-Embeds: Ace2, TabletLib, DewdropLib, FuBarPlugin-2.0
 ## LoadManagers: SupplyAndDemand, ForkliftGnome
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
@@ -23,6 +24,8 @@ lib\Ace2\AceConsole-2.0\AceConsole-2.0.lua
 lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua
 
 lib\Tablet-2.0\Tablet-2.0.lua
+lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 
 BulkMailInbox-enUS.lua
 BulkMailInbox.lua
+BulkMailFu.lua

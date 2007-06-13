@@ -13,7 +13,7 @@ local ibIndex, ibChanged, cleanPass, cashOnly  -- variables
 --[[----------------------------------------------------------------------------
   Local Processing
 ------------------------------------------------------------------------------]]
--- Build a table with info about all returnable items in the Inbox
+-- Build a table with info about all items and money in the Inbox
 local inboxCache = {}  -- table to store info on inbox items
 local function inboxCacheBuild()
 	inboxCache = {}
@@ -52,6 +52,8 @@ function BulkMailInbox:OnInitialize()
 	self:RegisterDefaults('profile', {
 		tablet_data = { detached = true, anchor = "TOPLEFT" },
 	})
+	self.db.profile.tablet_data.detached = true
+	self.db.profile.tablet_data.anchor = "TOPLEFT"
 	self:RegisterDefaults('char', {
 		altDel = false,
 		ctrlRet = true,
@@ -63,7 +65,7 @@ function BulkMailInbox:OnInitialize()
 
 	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
 
-	self:RegisterChatCommand({"/bulkmailinbox", "/bmi"}, {
+	self.opts = {
 		type = 'group',
 		args = {
 			altdel = {
@@ -97,7 +99,8 @@ function BulkMailInbox:OnInitialize()
 				set = function(v) self.db.char.inboxUI = v self:UpdateInboxGUI() end,
 			},
 		},
-	})
+	}
+	self:RegisterChatCommand({"/bulkmailinbox", "/bmi"}, self.opts) 
 end
 
 function BulkMailInbox:OnEnable()
