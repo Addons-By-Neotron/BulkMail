@@ -245,10 +245,8 @@ end
 function BulkMail:OnInitialize()
 	self:RegisterDB('BulkMail2DB')
 	self:RegisterDefaults('profile', {
-		tablet_data = { detached = true, anchor = "TOPLEFT" },
+		tablet_data = { detached = true }
 	})
-	self.db.profile.tablet_data.detached = true
-	self.db.profile.tablet_data.anchor = "TOPLEFT"
 	self:RegisterDefaults('realm', {
 		autoSendRules = {
 			['*'] = {
@@ -595,7 +593,7 @@ end
 
 function BulkMail:ShowSendQueueGUI()
 	if not tablet:IsRegistered('BM_SendQueueTablet') then
-		tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data,
+		tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
 				tablet:SetTitle("BulkMail Send Queue")
 				
