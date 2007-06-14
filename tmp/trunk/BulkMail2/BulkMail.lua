@@ -245,7 +245,7 @@ end
 function BulkMail:OnInitialize()
 	self:RegisterDB('BulkMail2DB')
 	self:RegisterDefaults('profile', {
-		tablet_data = { detached = true }
+		tablet_data = { detached = true, anchor = "TOPLEFT" }
 	})
 	self:RegisterDefaults('realm', {
 		autoSendRules = {
