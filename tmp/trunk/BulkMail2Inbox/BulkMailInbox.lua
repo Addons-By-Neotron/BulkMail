@@ -50,10 +50,8 @@ end
 function BulkMailInbox:OnInitialize()
 	self:RegisterDB('BulkMail2InboxDB')
 	self:RegisterDefaults('profile', {
-		tablet_data = { detached = true, anchor = "TOPLEFT" },
+		tablet_data = { detached = true }
 	})
-	self.db.profile.tablet_data.detached = true
-	self.db.profile.tablet_data.anchor = "TOPLEFT"
 	self:RegisterDefaults('char', {
 		altDel = false,
 		ctrlRet = true,
@@ -248,7 +246,7 @@ end
 function BulkMailInbox:UpdateInboxGUI()
 	if not self.db.char.inboxUI then return self:HideInboxGUI() end
 	if not tablet:IsRegistered('BMI_InboxTablet') then
-		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data,
+		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
 				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d)"], GetInboxNumItems()))
 				inboxCacheBuild()
