@@ -8,7 +8,7 @@ local tablet   = AceLibrary('Tablet-2.0')
 local _G = getfenv(0)
 
 local sortFields  -- tables
-local ibIndex, ibChanged, cleanPass, cashOnly  -- variables
+local ibIndex, ibChanged, cleanPass, cashOnly, takeAllLock  -- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -40,7 +40,7 @@ end
 local function takeAll(cash)
 	cashOnly = cash
 	ibIndex = GetInboxNumItems()
-	BulkMailInbox:RegisterEvent('MAIL_INBOX_UPDATE')
+	takeAllInProgress = true
 	BulkMailInbox:MAIL_INBOX_UPDATE()
 end
 
@@ -109,6 +109,7 @@ function BulkMailInbox:OnEnable()
 	self:RegisterEvent('MAIL_CLOSED')
 	self:RegisterEvent('PLAYER_ENTERING_WORLD')
 	self:RegisterEvent('UI_ERROR_MESSAGE')
+	self:RegisterEvent('MAIL_INBOX_UPDATE')
 
 	-- Handle being LoD loaded while at the mailbox
 	if MailFrame:IsVisible() then
@@ -138,7 +139,6 @@ function BulkMailInbox:MAIL_SHOW()
 end
 
 function BulkMailInbox:MAIL_CLOSED()
-	if self:IsEventRegistered('MAIL_INBOX_UPDATE') then self:UnregisterEvent('MAIL_INBOX_UPDATE') end
 	self:UnhookAll()
 	self:HideInboxGUI()
 end
@@ -152,10 +152,14 @@ end
 
 -- Take next inbox item or money; skip past COD items and letters.
 function BulkMailInbox:MAIL_INBOX_UPDATE()
+	self:RefreshInboxGUI()
+	if not takeAllInProgress then return end
+
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
 		if cleanPass or numItems <= 0 then
-			return BulkMailInbox:UnregisterEvent('MAIL_INBOX_UPDATE')
+			takeAllInProgress = false
+			return
 		else
 			ibIndex = numItems
 			cleanPass = true
@@ -187,7 +191,7 @@ end
   Hooks
 ------------------------------------------------------------------------------]]
 function BulkMailInbox:SetInboxItem(tooltip, index, ...)
-	local _, _, _, _, money, COD, _, hasItem, _, wasReturned, _, canReply = GetInboxHeaderInfo(index)
+	local money, COD, _, hasItem, _, wasReturned, _, canReply = select(5, GetInboxHeaderInfo(index))
 	if self.db.char.shiftTake then tooltip:AddLine(L["Shift - Take Item"]) end
 	if wasReturned then 
 		if self.db.char.altDel then
@@ -199,7 +203,7 @@ function BulkMailInbox:SetInboxItem(tooltip, index, ...)
 end
 
 function BulkMailInbox:InboxFrame_OnClick(index, ...)
-	if self:IsEventRegistered('MAIL_INBOX_UPDATE') then self:UnregisterEvent('MAIL_INBOX_UPDATE') end
+	takeAllInProgress = false
 	local _, _, _, _, money, COD, _, hasItem, _, wasReturned, _, canReply = GetInboxHeaderInfo(index)
  	if self.db.char.shiftTake and IsShiftKeyDown() then
 		if money > 0 then TakeInboxMoney(index)
