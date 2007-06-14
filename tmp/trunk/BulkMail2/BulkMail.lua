@@ -10,7 +10,7 @@ local dewdrop  = AceLibrary('Dewdrop-2.0')
 
 local _G = getfenv(0)
 
-local auctionItemClasses, sendCache, destCache, rulesCache, autoSendRules, globalExclude  -- tables
+local auctionItemClasses, sendCache, destCache, reverseDestCache, rulesCache, autoSendRules, globalExclude  -- tables
 local cacheLock, sendDest, numItems, confirmedDestToRemove  -- variables
 
 --[[----------------------------------------------------------------------------
@@ -262,8 +262,10 @@ function BulkMail:OnInitialize()
 	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
 	
 	destCache = {}  -- destinations for which we have rules (or are going to add rules)
+	reverseDestCache = {}  -- integer-indexed table of destinations
 	for dest in pairs(autoSendRules) do
 		destCache[dest] = true
+		table.insert(reverseDestCache, dest)
 	end
 
 	self:RegisterDefaults('char', {
@@ -310,7 +312,7 @@ function BulkMail:OnInitialize()
 					rmdest = {
 						name = L["rmdest"], type = 'text', aliases = L["rmd"],
 						desc = "Remove all rules corresponding to a particular destination.",
-						input = true, set = 'RemoveDestination', usage = L["<destination>"], get = false,
+						input = true, set = 'RemoveDestination', usage = L["<destination>"], get = false, validate = reverseDestCache,
 					},
 					clear = {
 						name = L["clear"], type = 'execute',
@@ -450,11 +452,18 @@ end
 function BulkMail:AddDestination(dest)
 	local _ = autoSendRules[dest]  -- trigger the table creation by accessing it
 	destCache[dest] = true
+	table.insert(reverseDestCache, dest)
 end
 
 function BulkMail:RemoveDestination(dest)
 	autoSendRules[dest] = nil
 	destCache[dest] = nil
+	for i=1, #reverseDestCache do
+		if reverseDestCache[i] == dest then
+			table.remove(reverseDestCache, i)
+			break
+		end
+	end
 end
 
 -- Simple function for adding include rules manually via itemlink or
