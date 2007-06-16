@@ -24,6 +24,7 @@ lib\Ace2\AceConsole-2.0\AceConsole-2.0.lua
 lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua
 
 lib\Tablet-2.0\Tablet-2.0.lua
+lib\Abacus-2.0\Abacus-2.0.lua
 lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 
 BulkMailInbox-enUS.lua

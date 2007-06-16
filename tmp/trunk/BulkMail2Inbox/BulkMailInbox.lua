@@ -3,20 +3,21 @@ BulkMailInbox = AceLibrary('AceAddon-2.0'):new('AceDB-2.0', 'AceEvent-2.0', 'Ace
 local L = AceLibrary('AceLocale-2.2'):new('BulkMailInbox')
 BulkMailInbox.L = L
 
-local tablet   = AceLibrary('Tablet-2.0')
+local tablet = AceLibrary('Tablet-2.0')
+local abacus = AceLibrary('Abacus-2.0')
 
 local _G = getfenv(0)
 
-local sortFields  -- tables
-local ibIndex, ibChanged, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
+local sortFields, inboxCache, markTable  -- tables
+local ibIndex, ibChanged, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
 ------------------------------------------------------------------------------]]
 -- Build a table with info about all items and money in the Inbox
-local inboxCache = {}  -- table to store info on inbox items
 local function inboxCacheBuild()
 	inboxCache = {}
+	inboxCash = 0
 	for i = 1, GetInboxNumItems() do
 		_, _, sender, _, money, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
 		if hasItem or money > 0 then
@@ -25,6 +26,7 @@ local function inboxCacheBuild()
 				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money, qty = select(3, GetInboxItem(i)),
 				texture = hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01",
 			})
+			inboxCash = inboxCash + money
 		end
 	end
 	table.sort(inboxCache, function(a,b)
@@ -37,8 +39,9 @@ local function inboxCacheBuild()
 	end)
 end
 
-local function takeAll(cash)
+local function takeAll(cash, mark)
 	cashOnly = cash
+	markOnly = mark
 	ibIndex = GetInboxNumItems()
 	takeAllInProgress = true
 	BulkMailInbox:MAIL_INBOX_UPDATE()
@@ -62,6 +65,7 @@ function BulkMailInbox:OnInitialize()
 	})
 
 	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
+	markTable = {}
 
 	self.opts = {
 		type = 'group',
@@ -161,11 +165,15 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		else
 			ibIndex = numItems
 			cleanPass = true
-			return takeAll(cashOnly)
+			return takeAll(cashOnly, markOnly)
 		end
 	end
 	
-	local money, COD, _, hasItem = select(5, GetInboxHeaderInfo(ibIndex))
+	local money, COD, daysLeft, hasItem = select(5, GetInboxHeaderInfo(ibIndex))
+	if markOnly and not markTable[daysLeft] then
+		ibIndex = ibIndex - 1
+		return self:MAIL_INBOX_UPDATE()
+	end
 
 	if money > 0 then
 		cleanPass = false
@@ -248,8 +256,8 @@ function BulkMailInbox:UpdateInboxGUI()
 	if not tablet:IsRegistered('BMI_InboxTablet') then
 		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH", 'maxHeight', 850,
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d)"], GetInboxNumItems()))
 				inboxCacheBuild()
+				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d mails, %s)"], GetInboxNumItems(), abacus:FormatMoneyShort(inboxCash)))
 				local hlcol = 'text'..self.db.char.sortField
 				local cat = tablet:AddCategory('columns', 6,
 					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 end,
@@ -264,15 +272,28 @@ function BulkMailInbox:UpdateInboxGUI()
 				if inboxCache and next(inboxCache) then
 					for i, info in pairs(inboxCache) do
 						cat:AddLine(
-							'checked', true, 'hasCheck', true, 'checkIcon', info.texture,
-							'func', function() InboxFrame_OnClick(info.index) end,
+							'checked', true, 'hasCheck', true, 'checkIcon', not markTable[info.daysLeft] and info.texture,
+							'func', function()
+								if not IsModifierKeyDown() then
+									markTable[info.daysLeft] = not markTable[info.daysLeft] and true or nil
+									self:RefreshInboxGUI()
+								else
+									InboxFrame_OnClick(info.index)
+								end
+							end, 'indentation', markTable[info.daysLeft] and 0 or 10,
 							'text', info.itemLink,
 							'text2', info.qty,
-							'text3', string.format("%0.02fg", info.money/10000),
+							'text3', abacus:FormatMoneyFull(info.money),
 							'text4', info.returnable and L["Yes"] or L["No"],
 							'text5', info.sender,
 							'text6', string.format("%0.1f", info.daysLeft),
-							hlcol..'R', 1, hlcol..'G', 1, hlcol..'B', 1
+							'textR', markTable[info.daysLeft] and 1, 'textG', markTable[info.daysLeft] and 1, 'textB', markTable[info.daysLeft] and 1,
+							'text2R', markTable[info.daysLeft] and 1, 'text2G', markTable[info.daysLeft] and 1, 'text2B', markTable[info.daysLeft] and 1,
+							'text3R', markTable[info.daysLeft] and 1, 'text3G', markTable[info.daysLeft] and 1, 'text3B', markTable[info.daysLeft] and 1,
+							'text4R', markTable[info.daysLeft] and 1, 'text4G', markTable[info.daysLeft] and 1, 'text4B', markTable[info.daysLeft] and 1,
+							'text5R', markTable[info.daysLeft] and 1, 'text5G', markTable[info.daysLeft] and 1, 'text5B', markTable[info.daysLeft] and 1,
+							'text6R', markTable[info.daysLeft] and 1, 'text6G', markTable[info.daysLeft] and 1, 'text6B', markTable[info.daysLeft] and 1,
+							hlcol..'R', 1, hlcol..'G', 1, hlcol..'B', markTable[info.daysLeft] and 1 or 0.5
 						)
 					end
 				else
@@ -282,6 +303,12 @@ function BulkMailInbox:UpdateInboxGUI()
 				cat:AddLine()
 				cat:AddLine('text', L["Take All"], 'func', takeAll)
 				cat:AddLine('text', L["Take Cash"], 'func', function() takeAll(true) end)
+				cat:AddLine('text', L["Take Selected"], 'func', next(markTable) and function() takeAll(false, true) end,
+					'textR', not next(markTable) and 0.5, 'textG', not next(markTable) and 0.5, 'textB', not next(markTable) and 0.5
+				)
+				cat:AddLine('text', L["Clear Selected"], 'func', next(markTable) and function() for i in pairs(markTable) do markTable[i] = nil end end,
+					'textR', not next(markTable) and 0.5, 'textG', not next(markTable) and 0.5, 'textB', not next(markTable) and 0.5
+				)
 				cat:AddLine('text', L["Close"], 'func', function() BulkMailInbox:ScheduleEvent(function() tablet:Close('BMI_InboxTablet') end, 0.01) end)  -- WTF
 			end
 		)
