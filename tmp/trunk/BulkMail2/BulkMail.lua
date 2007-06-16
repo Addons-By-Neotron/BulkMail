@@ -5,6 +5,7 @@ BulkMail.L = L
 
 local tablet   = AceLibrary('Tablet-2.0')
 local gratuity = AceLibrary('Gratuity-2.0')
+local abacus   = AceLibrary('Abacus-2.0')
 local pt       = AceLibrary('PeriodicTable-3.0')
 local dewdrop  = AceLibrary('Dewdrop-2.0')
 
@@ -422,7 +423,7 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 		self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self, cod)
 	else
 		if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' then
-			SendMailSubjectEditBox:SetText(string.format(L["Cash: %0.02fg"], MoneyInputFrame_GetCopper(SendMailMoney)/10000))
+			SendMailSubjectEditBox:SetText(abacus:FormatMoneyFull(MoneyInputFrame_GetCopper(SendMailMoney)))
 		end
 		this = SendMailMailButton
 		return self.hooks[frame].OnClick(frame, a1)
