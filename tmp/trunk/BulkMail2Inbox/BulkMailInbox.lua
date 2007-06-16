@@ -8,7 +8,7 @@ local tablet   = AceLibrary('Tablet-2.0')
 local _G = getfenv(0)
 
 local sortFields  -- tables
-local ibIndex, ibChanged, cleanPass, cashOnly, takeAllLock  -- variables
+local ibIndex, ibChanged, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -22,8 +22,8 @@ local function inboxCacheBuild()
 		if hasItem or money > 0 then
 			table.insert(inboxCache, {
 				index = i, sender = sender, returnable = not wasReturned,
-				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money,
-				texture = select(2, GetInboxItem(i)), qty = select(3, GetInboxItem(i)),
+				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money, qty = select(3, GetInboxItem(i)),
+				texture = hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01",
 			})
 		end
 	end
@@ -50,7 +50,7 @@ end
 function BulkMailInbox:OnInitialize()
 	self:RegisterDB('BulkMail2InboxDB')
 	self:RegisterDefaults('profile', {
-		tablet_data = { detached = true, anchor = "TOPLEFT" }
+		tablet_data = { detached = true, anchor = "TOPLEFT", offsetx = 340, offsety = -104 }
 	})
 	self:RegisterDefaults('char', {
 		altDel = false,
@@ -172,7 +172,7 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		ibChanged = GetTime()
 		return TakeInboxMoney(ibIndex)
 	end
-	
+
 	if not hasItem or cashOnly or COD > 0 then
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
@@ -246,12 +246,12 @@ end
 function BulkMailInbox:UpdateInboxGUI()
 	if not self.db.char.inboxUI then return self:HideInboxGUI() end
 	if not tablet:IsRegistered('BMI_InboxTablet') then
-		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
+		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH", 'maxHeight', 850,
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
 				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d)"], GetInboxNumItems()))
 				inboxCacheBuild()
-				local hlText = 'text'..self.db.char.sortField
-				local cat = tablet:AddCategory('columns', 6, 'child_indentation', 5,
+				local hlcol = 'text'..self.db.char.sortField
+				local cat = tablet:AddCategory('columns', 6,
 					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 end,
 					'text', L["Items (Inbox click actions apply)"],
 					'text2', L["Qty."],
@@ -259,7 +259,7 @@ function BulkMailInbox:UpdateInboxGUI()
 					'text4', L["Returnable"],
 					'text5', L["Sender"],
 					'text6', L["TTL"],
-					hlText..'R', 1, hlText..'G', 0.8, hlText..'B', 0
+					hlcol..'R', 1, hlcol..'G', 0.8, hlcol..'B', 0
 				)
 				if inboxCache and next(inboxCache) then
 					for i, info in pairs(inboxCache) do
@@ -272,7 +272,7 @@ function BulkMailInbox:UpdateInboxGUI()
 							'text4', info.returnable and L["Yes"] or L["No"],
 							'text5', info.sender,
 							'text6', string.format("%0.1f", info.daysLeft),
-							hlText..'R', 1, hlText..'G', 1, hlText..'B', 1
+							hlcol..'R', 1, hlcol..'G', 1, hlcol..'B', 1
 						)
 					end
 				else
