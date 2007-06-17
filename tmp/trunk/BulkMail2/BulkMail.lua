@@ -496,6 +496,7 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
+suffix = "\255"
 function BulkMail:Send(cod)
 	if StaticPopup_Visible('SEND_MONEY') then return end
 	if GetSendMailItem() then
@@ -520,6 +521,8 @@ function BulkMail:Send(cod)
 		if itemLink then
 			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
 		end
+		SendMailSubjectEditBox:SetText(SendMailSubjectEditBox:GetText()..suffix)
+		suffix = suffix..suffix
 		if cod then
 			SendMailSendMoneyButton:SetChecked(nil)
 			MoneyInputFrame_SetCopper(SendMailMoney, cod)
