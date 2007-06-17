@@ -890,6 +890,10 @@ function BulkMail:RegisterAutoSendEditTablet()
 	)
 end
 
+function BulkMail:OpenAutoSendEditTablet()
+	tablet:Open("BM_AutoSendEditTablet")
+end
+
 --[[----------------------------------------------------------------------------
   StaticPopups
 ------------------------------------------------------------------------------]]

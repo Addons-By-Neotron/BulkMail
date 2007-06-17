@@ -1,3 +1,4 @@
+
 local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
 L:RegisterTranslations("enUS", function() return {
 	["Accept"] = true,
@@ -18,7 +19,6 @@ L:RegisterTranslations("enUS", function() return {
 	["clear"] = true,
 	["Clear"] = true,
 	["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."] = true,
-	["Click to show AutoSend Rules interface."] = true,
 	["Close"] = true,
 	["dd"] = true,
 	["Default destination"] = true,
@@ -31,6 +31,7 @@ L:RegisterTranslations("enUS", function() return {
 	["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."] = true,
 	["Exclude"] = true,
 	["Global Exclude"] = true,
+	["Hint: Click to show the AutoSend Rules editor."] = true,
 	["Inbox"] = true,
 	["Include"] = true,
 	["Item cannot be mailed: %s."] = true,
