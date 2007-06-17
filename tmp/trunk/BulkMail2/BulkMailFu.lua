@@ -24,8 +24,10 @@ function BulkMailFu:OnEnable()
 	self.options.args.profile.hidden = true
 	self.options.args.standby.hidden = true
 	self.options.args.about.hidden = true
-	self.options.args.inbox.args.standby.hidden = true
-	self.options.args.inbox.args.about.hidden = true
+	if BulkMailInbox then
+		self.options.args.inbox.args.standby.hidden = true
+		self.options.args.inbox.args.about.hidden = true
+	end
 end
 
 function BulkMailFu:OnMenuRequest()
