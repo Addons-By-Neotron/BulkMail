@@ -19,10 +19,10 @@ local function inboxCacheBuild()
 	inboxCache = {}
 	inboxCash = 0
 	for i = 1, GetInboxNumItems() do
-		_, _, sender, _, money, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
+		_, _, sender, subject, money, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
 		if hasItem or money > 0 then
 			table.insert(inboxCache, {
-				index = i, sender = sender, returnable = not wasReturned,
+				index = i, sender = sender, bmid = daysLeft..subject, returnable = not wasReturned,
 				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money, qty = select(3, GetInboxItem(i)),
 				texture = hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01",
 			})
@@ -169,8 +169,8 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		end
 	end
 	
-	local money, COD, daysLeft, hasItem = select(5, GetInboxHeaderInfo(ibIndex))
-	if markOnly and not markTable[daysLeft] then
+	local subject, money, COD, daysLeft, hasItem = select(4, GetInboxHeaderInfo(ibIndex))
+	if markOnly and not markTable[daysLeft..subject] then
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	end
@@ -272,28 +272,28 @@ function BulkMailInbox:UpdateInboxGUI()
 				if inboxCache and next(inboxCache) then
 					for i, info in pairs(inboxCache) do
 						cat:AddLine(
-							'checked', true, 'hasCheck', true, 'checkIcon', not markTable[info.daysLeft] and info.texture,
+							'checked', true, 'hasCheck', true, 'checkIcon', not markTable[info.bmid] and info.texture,
 							'func', function()
 								if not IsModifierKeyDown() then
-									markTable[info.daysLeft] = not markTable[info.daysLeft] and true or nil
+									markTable[info.bmid] = not markTable[info.bmid] and true or nil
 									self:RefreshInboxGUI()
 								else
 									InboxFrame_OnClick(info.index)
 								end
-							end, 'indentation', markTable[info.daysLeft] and 0 or 10,
+							end, 'indentation', markTable[info.bmid] and 0 or 10,
 							'text', info.itemLink,
 							'text2', info.qty,
 							'text3', abacus:FormatMoneyFull(info.money),
 							'text4', info.returnable and L["Yes"] or L["No"],
 							'text5', info.sender,
 							'text6', string.format("%0.1f", info.daysLeft),
-							'textR', markTable[info.daysLeft] and 1, 'textG', markTable[info.daysLeft] and 1, 'textB', markTable[info.daysLeft] and 1,
-							'text2R', markTable[info.daysLeft] and 1, 'text2G', markTable[info.daysLeft] and 1, 'text2B', markTable[info.daysLeft] and 1,
-							'text3R', markTable[info.daysLeft] and 1, 'text3G', markTable[info.daysLeft] and 1, 'text3B', markTable[info.daysLeft] and 1,
-							'text4R', markTable[info.daysLeft] and 1, 'text4G', markTable[info.daysLeft] and 1, 'text4B', markTable[info.daysLeft] and 1,
-							'text5R', markTable[info.daysLeft] and 1, 'text5G', markTable[info.daysLeft] and 1, 'text5B', markTable[info.daysLeft] and 1,
-							'text6R', markTable[info.daysLeft] and 1, 'text6G', markTable[info.daysLeft] and 1, 'text6B', markTable[info.daysLeft] and 1,
-							hlcol..'R', 1, hlcol..'G', 1, hlcol..'B', markTable[info.daysLeft] and 1 or 0.5
+							'textR', markTable[info.bmid] and 1, 'textG', markTable[info.bmid] and 1, 'textB', markTable[info.bmid] and 1,
+							'text2R', markTable[info.bmid] and 1, 'text2G', markTable[info.bmid] and 1, 'text2B', markTable[info.bmid] and 1,
+							'text3R', markTable[info.bmid] and 1, 'text3G', markTable[info.bmid] and 1, 'text3B', markTable[info.bmid] and 1,
+							'text4R', markTable[info.bmid] and 1, 'text4G', markTable[info.bmid] and 1, 'text4B', markTable[info.bmid] and 1,
+							'text5R', markTable[info.bmid] and 1, 'text5G', markTable[info.bmid] and 1, 'text5B', markTable[info.bmid] and 1,
+							'text6R', markTable[info.bmid] and 1, 'text6G', markTable[info.bmid] and 1, 'text6B', markTable[info.bmid] and 1,
+							hlcol..'R', 1, hlcol..'G', 1, hlcol..'B', markTable[info.bmid] and 1 or 0.5
 						)
 					end
 				else
