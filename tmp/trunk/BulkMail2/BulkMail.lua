@@ -357,9 +357,6 @@ end
   Events
 ------------------------------------------------------------------------------]]
 function BulkMail:MAIL_SHOW()
-	OpenAllBags()  -- make sure container frames are all seen before we run through them
-	OpenAllBags()  -- in case previous line closed bags (if it was called while a bag was open)
-
 	rulesCacheBuild()
 
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
