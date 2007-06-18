@@ -302,7 +302,8 @@ function BulkMailInbox:UpdateInboxGUI()
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
 				cat:AddLine('text', L["Take All"], 'func', takeAll)
-				cat:AddLine('text', L["Take Cash"], 'func', function() takeAll(true) end)
+				cat:AddLine('text', L["Take Cash"], 'func', inboxCash > 0 and function() takeAll(true) end,
+					'textR', inboxCash <= 0 and 0.5, 'textG', inboxCash <= 0 and 0.5, 'textB', inboxCash <= 0 and 0.5)
 				cat:AddLine('text', L["Take Selected"], 'func', next(markTable) and function() takeAll(false, true) end,
 					'textR', not next(markTable) and 0.5, 'textG', not next(markTable) and 0.5, 'textB', not next(markTable) and 0.5
 				)
