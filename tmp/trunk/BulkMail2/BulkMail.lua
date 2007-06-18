@@ -318,7 +318,7 @@ function BulkMail:OnInitialize()
 					clear = {
 						name = L["clear"], type = 'execute',
 						desc = L["Clear all rules for this realm."],
-						func = function() self:ResetDB('realm') end, confirm = true,
+						func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end tablet:Refresh('BM_AutoSendEditTablet') end, confirm = true,
 					},
 				},
 			},
@@ -348,9 +348,9 @@ end
 
 function BulkMail:OnDisable()
 	self:UnregisterAllEvents()
-	dewdrop:Unregister('BM_AddRuleDD')
-	tablet:Unregister('BM_AutoSendEditTablet')
-	tablet:Unregister('BM_SendQueueTablet')
+	if dewdrop:IsRegistered('BM_AddRuleDD') then dewdrop:Unregister('BM_AddRuleDD') end
+	if tablet:IsRegistered('BM_AutoSendEditTablet') then tablet:Unregister('BM_AutoSendEditTablet') end
+	if tablet:IsRegistered('BM_SendQueueTablet') then tablet:Unregister('BM_SendQueueTablet') end
 end
 
 --[[----------------------------------------------------------------------------
@@ -769,10 +769,9 @@ function BulkMail:RegisterAddRuleDewdrop()
 	-- Create table for Dewdrop and register
 	createStaticARDTables()
 	updateDynamicARDTables()
-	dewdrop:Register('BM_AddRuleDD',
-		'children', function() 
-		dewdrop:FeedTable({ {text = L["Add rule"], isTitle = true}, bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable })
-		end
+	dewdrop:Register('BM_AddRuleDD', 'children', function() 
+			dewdrop:FeedTable({ {text = L["Add rule"], isTitle = true}, bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable })
+		end, 'cursorX', true, 'cursorY', true
 	)
 end
 
