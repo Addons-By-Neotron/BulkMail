@@ -3,7 +3,7 @@
 ## Notes: Bulk mail sending made really easy
 ## Version: 2.1
 ## Author: hyperactiveChipmunk
-## X-Credits: Kemayo, Kergoth, Bigzero, Tekkub
+## X-Credits: Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
