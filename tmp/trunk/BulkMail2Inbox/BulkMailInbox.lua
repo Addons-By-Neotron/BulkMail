@@ -121,7 +121,7 @@ end
 
 function BulkMailInbox:OnDisable()
 	self:UnregisterAllEvents()
-	tablet:Unregister('BMI_InboxTablet')
+	if tablet:IsRegistered('BMI_InboxTablet') then tablet:Unregister('BMI_InboxTablet') end
 end
 
 --[[----------------------------------------------------------------------------
