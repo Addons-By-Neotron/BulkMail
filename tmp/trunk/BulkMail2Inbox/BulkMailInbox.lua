@@ -282,7 +282,7 @@ function BulkMailInbox:UpdateInboxGUI()
 								end
 							end,
 							'onEnterFunc', function()  -- contributed by bigzero
-								GameTooltip:SetOwner(this, 'ANCHOR_RIGHT', 7, -18)
+								GameTooltip:SetOwner(_G.this, 'ANCHOR_RIGHT', 7, -18)
 								GameTooltip:SetInboxItem(info.index)
 								if IsShiftKeyDown() then
 									GameTooltip_ShowCompareItem()
