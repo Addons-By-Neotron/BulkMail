@@ -94,7 +94,7 @@ end
 
 -- Returns the autosend destination of an itemID, according to the
 -- rulesCache, or nil if no rules for this item are found.
-function rulesCacheDest(item)
+local function rulesCacheDest(item)
 	if not item then return end
 	local rdest
 	local itemID = type(item) == 'number' and item or tonumber(string.match(item, "item:(%d+)"))
@@ -138,7 +138,7 @@ local function getBagSlotFrame(bag,slot)
 	if bag >= 0 and bag < NUM_CONTAINER_FRAMES and slot > 0 and slot <= MAX_CONTAINER_ITEMS then
 		local bagslots = GetContainerNumSlots(bag)
 		if bagslots > 0 then
-			return getglobal("ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1))
+			return _G["ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1)]
 		end
 	end
 	return
@@ -384,11 +384,11 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 ------------------------------------------------------------------------------]]
 function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
 	if IsControlKeyDown() and IsShiftKeyDown() then
-		self:QuickSend(this)
+		self:QuickSend(_G.this)
 	elseif IsAltKeyDown() then
-		sendCacheToggle(this)
+		sendCacheToggle(_G.this)
 	elseif not IsShiftKeyDown() then
-		sendCacheRemove(this)
+		sendCacheRemove(_G.this)
 	end
 end
 
@@ -436,7 +436,7 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 		if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' then
 			SendMailSubjectEditBox:SetText(abacus:FormatMoneyFull(MoneyInputFrame_GetCopper(SendMailMoney)))
 		end
-		this = SendMailMailButton
+		_G.this = SendMailMailButton
 		return self.hooks[frame].OnClick(frame, a1)
 	end
 end
@@ -513,7 +513,7 @@ function BulkMail:Send(cod)
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
-			this = SendMailMailButton
+			_G.this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
 			self:Print(L["No default destination set."])
@@ -565,7 +565,7 @@ function BulkMail:QuickSend(bag, slot)
 				SendMailNameEditBox:SetText(rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 			end
 			if SendMailNameEditBox:GetText() ~= '' then
-				this = SendMailMailButton
+				_G.this = SendMailMailButton
 				return self.hooks[SendMailMailButton].OnClick()
 			elseif not self.db.char.defaultDestination then
 				self:Print(L["No default destination set."])
@@ -915,25 +915,25 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	button1 = L["Accept"], button2 = L["Cancel"],
 	hasEditBox = 1, maxLetters = 20,
 	OnAccept = function()
-		BulkMail:AddDestination(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+		BulkMail:AddDestination(_G[this:GetParent():GetName().."EditBox"]:GetText())
 		tablet:Refresh('BM_AutoSendEditTablet')
 	end,
 	OnShow = function()
-		getglobal(this:GetName().."EditBox"):SetFocus()
+		G[this:GetName().."EditBox"]:SetFocus()
 	end,
 	OnHide = function()
-		if ( ChatFrameEditBox:IsVisible() ) then
+		if ChatFrameEditBox:IsVisible() then
 			ChatFrameEditBox:SetFocus()
 		end
-		getglobal(this:GetName().."EditBox"):SetText('')
+		_G[this:GetName().."EditBox"]:SetText('')
 	end,
 	EditBoxOnEnterPressed = function()
-		BulkMail:AddDestination(getglobal(this:GetParent():GetName().."EditBox"):GetText())
+		BulkMail:AddDestination(_G[this:GetParent():GetName().."EditBox"]:GetText())
 		tablet:Refresh('BM_AutoSendEditTablet')
-		this:GetParent():Hide()
+		_G.this:GetParent():Hide()
 	end,
 	EditBoxOnEscapePressed = function()
-		this:GetParent():Hide()
+		_G.this:GetParent():Hide()
 	end,
 	timeout = 0, exclusive = 1, whileDead = 1, hideOnEscape = 1,
 }
