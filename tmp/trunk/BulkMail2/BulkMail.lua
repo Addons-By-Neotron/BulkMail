@@ -919,7 +919,7 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 		tablet:Refresh('BM_AutoSendEditTablet')
 	end,
 	OnShow = function()
-		G[this:GetName().."EditBox"]:SetFocus()
+		_G[this:GetName().."EditBox"]:SetFocus()
 	end,
 	OnHide = function()
 		if ChatFrameEditBox:IsVisible() then
