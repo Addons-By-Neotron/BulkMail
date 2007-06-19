@@ -507,7 +507,7 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
-suffix = "\255"
+local suffix = "\255"
 function BulkMail:Send(cod)
 	if StaticPopup_Visible('SEND_MONEY') then return end
 	if GetSendMailItem() then
