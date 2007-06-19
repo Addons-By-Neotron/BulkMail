@@ -19,10 +19,10 @@ local function inboxCacheBuild()
 	inboxCache = {}
 	inboxCash = 0
 	for i = 1, GetInboxNumItems() do
-		_, _, sender, subject, money, _, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
+		_, _, sender, subject, money, cod, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
 		if hasItem or money > 0 then
 			table.insert(inboxCache, {
-				index = i, sender = sender, bmid = daysLeft..subject, returnable = not wasReturned,
+				index = i, sender = sender, bmid = daysLeft..subject, returnable = not wasReturned, cod = cod,
 				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money, qty = select(3, GetInboxItem(i)),
 				texture = hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01",
 			})
@@ -280,7 +280,26 @@ function BulkMailInbox:UpdateInboxGUI()
 								else
 									InboxFrame_OnClick(info.index)
 								end
-							end, 'indentation', markTable[info.bmid] and 0 or 10,
+							end,
+							'onEnterFunc', function()  -- contributed by bigzero
+								GameTooltip:SetOwner(this, 'ANCHOR_RIGHT', 7)
+								GameTooltip:SetInboxItem(info.index)
+								if IsShiftKeyDown() then
+									GameTooltip_ShowCompareItem()
+								end
+								if info.money > 0 then
+									GameTooltip:AddLine(ENCLOSED_MONEY, "", 1, 1, 1)
+									SetTooltipMoney(GameTooltip, info.money)
+									SetMoneyFrameColor('GameTooltipMoneyFrame', HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+								end 
+								if info.cod > 0 then
+									GameTooltip:AddLine(COD_AMOUNT, "", 1, 1, 1)
+									SetTooltipMoney(GameTooltip, info.cod)
+									SetMoneyFrameColor('GameTooltipMoneyFrame', HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+								end 
+								GameTooltip:Show()
+							end,
+							'indentation', markTable[info.bmid] and 0 or 10,
 							'text', info.itemLink,
 							'text2', info.qty,
 							'text3', abacus:FormatMoneyFull(info.money),
