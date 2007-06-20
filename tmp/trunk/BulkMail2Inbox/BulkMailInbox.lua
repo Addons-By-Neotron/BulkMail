@@ -225,24 +225,20 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 	
 	local subject, money, COD, daysLeft, hasItem = select(4, GetInboxHeaderInfo(ibIndex))
 	if markOnly and not markTable[daysLeft..subject] then
-		BulkMailInbox:Print(ibIndex, 'not marked')
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	end
 
 	if money > 0 then
-		BulkMailInbox:Print(ibIndex, 'take money')
 		cleanPass = false
 		ibChanged = GetTime()
 		return TakeInboxMoney(ibIndex)
 	end
 
 	if not hasItem or cashOnly or COD > 0 then
-		BulkMailInbox:Print(ibIndex, 'skip')
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	else
-		BulkMailInbox:Print(ibIndex, 'take item')
 		cleanPass = false
 		ibChanged = GetTime()
 		ibIndex = ibIndex - 1
