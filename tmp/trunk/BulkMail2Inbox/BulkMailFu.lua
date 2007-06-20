@@ -4,7 +4,6 @@ local L = BulkMail and BulkMail.L or BulkMailInbox.L
 
 BulkMailFu:RegisterDB("BulkMail2Fu")
 BulkMailFu.hasIcon = true
-BulkMailFu.overrideMenu = true
 BulkMailFu.hideWithoutStandby = true
 BulkMailFu.hasNoText = true
 BulkMailFu.hasNoColor = true
@@ -22,6 +21,8 @@ function BulkMailFu:OnEnable()
 			self.opts = BulkMailInbox.opts
 		end
 	end
+	self.opts.args.profile.hidden = true
+	self.opts.args.standby.hidden = true
 end
 
 function BulkMailFu:OnMenuRequest()

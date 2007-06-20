@@ -12,20 +12,75 @@ local sortFields, inboxCache, markTable  -- tables
 local ibIndex, ibChanged, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
 
 --[[----------------------------------------------------------------------------
+  Table Handling
+------------------------------------------------------------------------------]]
+local new, del, newHash, newSet
+do
+	local list = setmetatable({}, {__mode='k'})
+	function new(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+			for i = 1, select('#', ...) do
+				t[i] = select(i, ...)
+			end
+			return t
+		else
+			return { ... }
+		end
+	end
+	
+	function newHash(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+		else
+			t = {}
+		end
+		for i = 1, select('#', ...), 2 do
+			t[select(i, ...)] = select(i+1, ...)
+		end
+		return t
+	end
+	
+	function newSet(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+		else
+			t = {}
+		end
+		for i = 1, select('#', ...) do
+			t[select(i, ...)] = true
+		end
+		return t
+	end
+
+	function del(t)
+		for k in pairs(t) do
+			t[k] = nil
+		end
+		list[t] = true
+		return nil
+	end
+end
+
+--[[----------------------------------------------------------------------------
   Local Processing
 ------------------------------------------------------------------------------]]
 -- Build a table with info about all items and money in the Inbox
+inboxCache = new()
 local function inboxCacheBuild()
-	inboxCache = {}
+	for k in ipairs(inboxCache) do del(inboxCache[k]) inboxCache[k] = nil end
 	inboxCash = 0
 	for i = 1, GetInboxNumItems() do
 		_, _, sender, subject, money, cod, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
 		if hasItem or money > 0 then
-			table.insert(inboxCache, {
-				index = i, sender = sender, bmid = daysLeft..subject, returnable = not wasReturned, cod = cod,
-				daysLeft = daysLeft, itemLink = GetInboxItemLink(i) or L["Cash Only"], money = money, qty = select(3, GetInboxItem(i)),
-				texture = hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01",
-			})
+			table.insert(inboxCache, newHash(
+				'index', i, 'sender', sender, 'bmid', daysLeft..subject, 'returnable', not wasReturned, 'cod', cod,
+				'daysLeft', daysLeft, 'itemLink', GetInboxItemLink(i) or L["Cash Only"], 'money', money, 'qty', select(3, GetInboxItem(i)),
+				'texture', hasItem and select(2, GetInboxItem(i)) or money > 0 and "Interface\\Icons\\INV_Misc_Coin_01"
+			))
 			inboxCash = inboxCash + money
 		end
 	end
@@ -65,7 +120,7 @@ function BulkMailInbox:OnInitialize()
 	})
 
 	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
-	markTable = {}
+	markTable = new()
 
 	self.opts = {
 		type = 'group',
@@ -92,13 +147,13 @@ function BulkMailInbox:OnInitialize()
 				name = L["Take All"], type = 'toggle', aliases = L["ta"],
 				desc = L["Enable 'Take All' button in inbox."],
 				get = function() return self.db.char.takeAll end,
-				set = function(v) self.db.char.takeAll = v self:UpdateTakeAllButton() end,
+				set = function(v) self.db.char.takeAll = v; self:UpdateTakeAllButton() end,
 			},
 			gui = {
 				name = L["Show Inbox GUI"], type = 'toggle',
 				desc = L["Show the Inbox Items GUI"],
 				get = function() return self.db.char.inboxUI end,
-				set = function(v) self.db.char.inboxUI = v self:UpdateInboxGUI() end,
+				set = function(v) self.db.char.inboxUI = v; self:RefreshInboxGUI() end,
 			},
 		},
 	}
@@ -128,21 +183,21 @@ end
   Events
 ------------------------------------------------------------------------------]]
 function BulkMailInbox:MAIL_SHOW()
+	ibChanged = GetTime()
+	ibIndex = GetInboxNumItems()
+
 	self:SecureHook('CheckInbox', 'RefreshInboxGUI')
 	self:SecureHook(GameTooltip, 'SetInboxItem')
 	self:Hook('InboxFrame_OnClick', nil, true)
-	self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
-	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
+	self:SecureHookScript(MailFrameTab1, 'OnClick', 'ShowInboxGUI')
+	self:SecureHookScript(MailFrameTab2, 'OnClick', 'HideInboxGUI')
 
-	SendMailMailButton:Enable()
-	ibIndex = GetInboxNumItems()
-	ibChanged = GetTime()
-	self:UpdateInboxGUI()
+	self:RefreshInboxGUI()
 end
 
 function BulkMailInbox:MAIL_CLOSED()
-	self:UnhookAll()
 	self:HideInboxGUI()
+	self:UnhookAll()
 end
 BulkMailInbox.PLAYER_ENTERING_WORLD = BulkMailInbox.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
@@ -154,8 +209,7 @@ end
 
 -- Take next inbox item or money; skip past COD items and letters.
 function BulkMailInbox:MAIL_INBOX_UPDATE()
-	self:RefreshInboxGUI()
-	if not takeAllInProgress then return end
+	if not takeAllInProgress then return self:RefreshInboxGUI() end
 
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
@@ -171,32 +225,36 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 	
 	local subject, money, COD, daysLeft, hasItem = select(4, GetInboxHeaderInfo(ibIndex))
 	if markOnly and not markTable[daysLeft..subject] then
+		BulkMailInbox:Print(ibIndex, 'not marked')
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	end
 
 	if money > 0 then
+		BulkMailInbox:Print(ibIndex, 'take money')
 		cleanPass = false
 		ibChanged = GetTime()
 		return TakeInboxMoney(ibIndex)
 	end
 
 	if not hasItem or cashOnly or COD > 0 then
+		BulkMailInbox:Print(ibIndex, 'skip')
 		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	else
+		BulkMailInbox:Print(ibIndex, 'take item')
 		cleanPass = false
 		ibChanged = GetTime()
 		ibIndex = ibIndex - 1
-		TakeInboxItem(ibIndex+1)
+		return TakeInboxItem(ibIndex + 1)
 	end
-	
 end
 
 --[[----------------------------------------------------------------------------
   Hooks
 ------------------------------------------------------------------------------]]
 function BulkMailInbox:SetInboxItem(tooltip, index, ...)
+	if takeAllInProgress then return end
 	local money, COD, _, hasItem, _, wasReturned, _, canReply = select(5, GetInboxHeaderInfo(index))
 	if self.db.char.shiftTake then tooltip:AddLine(L["Shift - Take Item"]) end
 	if wasReturned then 
@@ -219,16 +277,6 @@ function BulkMailInbox:InboxFrame_OnClick(index, ...)
 	elseif self.db.char.altDel and IsAltKeyDown() then DeleteInboxItem(index)
 	else return self.hooks.InboxFrame_OnClick(index, ...) end
 	ibChanged = GetTime()
-end
-
-function BulkMailInbox:MailFrameTab1_OnClick(frame, a1)
-	self:UpdateInboxGUI()
-	return self.hooks[frame].OnClick(frame, a1)
-end
-
-function BulkMailInbox:MailFrameTab2_OnClick(frame, a1)
-	self:HideInboxGUI()
-	return self.hooks[frame].OnClick(frame, a1)
 end
 
 --[[----------------------------------------------------------------------------
@@ -329,24 +377,35 @@ function BulkMailInbox:UpdateInboxGUI()
 				cat:AddLine('text', L["Clear Selected"], 'func', next(markTable) and function() for i in pairs(markTable) do markTable[i] = nil end end,
 					'textR', not next(markTable) and 0.5, 'textG', not next(markTable) and 0.5, 'textB', not next(markTable) and 0.5
 				)
-				cat:AddLine('text', L["Close"], 'func', function() BulkMailInbox:ScheduleEvent(function() tablet:Close('BMI_InboxTablet') end, 0.01) end)  -- WTF
+				cat:AddLine('text', L["Close"], 'func', function() BulkMailInbox:ScheduleEvent(function() tablet:Close('BMI_InboxTablet') end, 0) end)  -- WTF
 			end
 		)
 	end
-	tablet:Open('BMI_InboxTablet')
-	self:ScheduleRepeatingEvent('BMI_UpdateGUIEvent', self.RefreshInboxGUI, 0.5, self)
+	self:ShowInboxGUI()
+	ibChanged = GetTime()
+	self:ScheduleEvent('BMI_UpdateGUIEvent', self.RefreshInboxGUI, 2.5, self)
+end
+
+function BulkMailInbox:ShowInboxGUI()
+	if not self.db.char.inboxUI then return end
+	if tablet:IsRegistered('BMI_InboxTablet') then
+		tablet:Open('BMI_InboxTablet')
+	else
+		self:RefreshInboxGUI()
+	end
 end
 
 function BulkMailInbox:HideInboxGUI()
 	if tablet:IsRegistered('BMI_InboxTablet') then
 		tablet:Close('BMI_InboxTablet')
 	end
-	self:CancelScheduledEvent('BMI_UpdateGUIEvent')
 end
 
 function BulkMailInbox:RefreshInboxGUI()
-	if GetTime() - ibChanged > 2.5 then return end
+	if not self.db.char.inboxUI then return end
 	if tablet:IsRegistered('BMI_InboxTablet') then
 		tablet:Refresh('BMI_InboxTablet')
+	else
+		self:UpdateInboxGUI()
 	end
 end
