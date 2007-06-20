@@ -11,8 +11,72 @@ local dewdrop  = AceLibrary('Dewdrop-2.0')
 
 local _G = getfenv(0)
 
-local auctionItemClasses, sendCache, destCache, reverseDestCache, rulesCache, autoSendRules, globalExclude  -- tables
-local cacheLock, sendDest, numItems, confirmedDestToRemove  -- variables
+local auctionItemClasses, sendCache, destCache, reverseDestCache, rulesCache, autoSendRules, globalExclude
+local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- variables
+
+--[[----------------------------------------------------------------------------
+  Table Handling
+------------------------------------------------------------------------------]]
+local new, del, newHash, newSet
+do
+	local list = setmetatable({}, {__mode='k'})
+	function new(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+			for i = 1, select('#', ...) do
+				t[i] = select(i, ...)
+			end
+			return t
+		else
+			return { ... }
+		end
+	end
+
+	function newHash(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+		else
+			t = {}
+		end
+		for i = 1, select('#', ...), 2 do
+			t[select(i, ...)] = select(i+1, ...)
+		end
+		return t
+	end
+	
+	function newSet(...)
+		local t = next(list)
+		if t then
+			list[t] = nil
+		else
+			t = {}
+		end
+		for i = 1, select('#', ...) do
+			t[select(i, ...)] = true
+		end
+		return t
+	end
+
+	function del(t)
+		for k in pairs(t) do
+			t[k] = nil
+		end
+		list[t] = true
+		return nil
+	end
+
+	function deepDel(t)
+		if type(t) ~= "table" then
+			return nil
+		end
+		for k,v in pairs(t) do
+			t[k] = deepDel(v)
+		end
+		return del(t)
+	end
+end
 
 --[[----------------------------------------------------------------------------
   Local Processing
@@ -20,15 +84,15 @@ local cacheLock, sendDest, numItems, confirmedDestToRemove  -- variables
 -- Bag iterator, shamelessly stolen from PeriodicTable-2.0 (written by Tekkub)
 local iterbag, iterslot
 local function iter()
-	if iterslot > GetContainerNumSlots(iterbag) then iterbag, iterslot = iterbag+1, 1 end
+	if iterslot > GetContainerNumSlots(iterbag) then iterbag, iterslot = iterbag + 1, 1 end
 	if iterbag > NUM_BAG_SLOTS then return end
 	for b = iterbag,NUM_BAG_SLOTS do
 		for s = iterslot,GetContainerNumSlots(b) do
-			iterslot = s+1
+			iterslot = s + 1
 			local link = GetContainerItemLink(b,s)
 			if link then return b, s, link end
 		end
-		iterbag, iterslot = b+1, 1
+		iterbag, iterslot = b + 1, 1
 	end
 end
 local function bagIter()
@@ -44,10 +108,14 @@ end
 --               desired subtype keys
 -- Exclusions are processed after all include rules are handled, 
 -- and will nil out the appropriate keys in the table.
+rulesCache = new()
 local function rulesCacheBuild()
-	rulesCache = {}
+	if next(rulesCache) and not rulesAltered then return end
+	for k in pairs(rulesCache) do
+		rulesCache[k] = deepDel(rulesCache[k])
+	end
 	for dest, rules in pairs(autoSendRules) do
-		rulesCache[dest] = {}
+		rulesCache[dest] = new()
 		-- include rules
 		for _, itemID in ipairs(rules.include.items) do rulesCache[dest][tonumber(itemID)] = true end
 		for _, set in ipairs(rules.include.pt3Sets) do
@@ -55,11 +123,12 @@ local function rulesCacheBuild()
 		end
 		for _, itemTypeTable in ipairs(rules.include.itemTypes) do
 			local itype, isubtype = itemTypeTable.type, itemTypeTable.subtype
-			rulesCache[dest][itype] = rulesCache[dest][itype] or {}
 			if isubtype then 
+				rulesCache[dest][itype] = rulesCache[dest][itype] or new()
 				rulesCache[dest][itype][isubtype] = true 
 			else  -- need to add all subtypes individually
-				for __, subtype in ipairs(auctionItemClasses[itype]) do rulesCache[dest][itype][subtype] = true end
+				if rulesCache[dest][itype] then rulesCache[dest][itype] = del(rulesCache[dest][itype]) end
+				rulesCache[dest][itype] = newSet(unpack(auctionItemClasses[itype]))
 			end
 		end	
 		-- exclude rules
@@ -90,6 +159,7 @@ local function rulesCacheBuild()
 			end
 		end
 	end
+	rulesAltered = false
 end
 
 -- Returns the autosend destination of an itemID, according to the
@@ -141,7 +211,6 @@ local function getBagSlotFrame(bag,slot)
 			return _G["ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1)]
 		end
 	end
-	return
 end
 
 --shades or unshades the given bag slot
@@ -158,14 +227,14 @@ local function sendCacheAdd(bag, slot, squelch)
 	if type(slot) ~= 'number' then
 		bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
 	end
-	sendCache = sendCache or {}
+	sendCache = sendCache or new()
 	if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
 		gratuity:SetBagItem(bag, slot)
 		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
-			sendCache[bag] = sendCache[bag] or {}
+			sendCache[bag] = sendCache[bag] or new()
 			sendCache[bag][slot] = true; numItems = numItems + 1
 			shadeBagSlot(bag,slot,true)
-			BulkMail:RefreshSendQueueGUI()
+			if not squelch then BulkMail:RefreshSendQueueGUI() end
 			SendMailFrame_CanSend()
 		elseif not squelch then
 			BulkMail:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
@@ -183,7 +252,7 @@ local function sendCacheRemove(bag, slot)
 			numItems = numItems - 1
 			shadeBagSlot(bag,slot,false)
 		end
-		if not next(sendCache[bag]) then sendCache[bag] = nil end
+		if not next(sendCache[bag]) then sendCache[bag] = del(sendCache[bag]) end
 	end
 	BulkMail:RefreshSendQueueGUI()
 	updateSendCost()
@@ -224,14 +293,12 @@ end
 -- if the destination field is blank).
 local function sendCacheBuild(dest)
 	if not cacheLock then
-		sendCacheCleanup(true);
+		sendCacheCleanup(true)
 		if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then return BulkMail:RefreshSendQueueGUI() end  -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
 		for bag, slot, item in bagIter() do
 			local target = rulesCacheDest(item)
 			if target then
-				if dest == '' then 
-					sendCacheAdd(bag, slot, true)
-				elseif dest == target then
+				if dest == '' or dest == target then 
 					sendCacheAdd(bag, slot, true)
 				end
 			end
@@ -262,8 +329,8 @@ function BulkMail:OnInitialize()
 	})
 	autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
 	
-	destCache = {}  -- destinations for which we have rules (or are going to add rules)
-	reverseDestCache = {}  -- integer-indexed table of destinations
+	destCache = new()  -- destinations for which we have rules (or are going to add rules)
+	reverseDestCache = new()  -- integer-indexed table of destinations
 	for dest in pairs(autoSendRules) do
 		destCache[dest] = true
 		table.insert(reverseDestCache, dest)
@@ -358,7 +425,6 @@ end
 ------------------------------------------------------------------------------]]
 function BulkMail:MAIL_SHOW()
 	rulesCacheBuild()
-
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
@@ -397,7 +463,7 @@ function BulkMail:SendMailFrame_CanSend()
 		SendMailMailButton:Enable()
 		SendMailCODButton:Enable()
 	end
-	self:RefreshSendQueueGUI()
+	self:ScheduleEvent('BM_canSendRefresh', self.RefreshSendQueueGUI, 0.1, self)
 end
 
 function BulkMail:ContainerFrame_Update(...)
@@ -447,6 +513,7 @@ function BulkMail:MailFrameTab1_OnClick(frame, a1)
 end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
+	rulesCacheBuild()
 	self:ShowSendQueueGUI()
 	sendCacheBuild(SendMailNameEditBox:GetText())
 	return self.hooks[frame].OnClick(frame, a1)
@@ -465,6 +532,7 @@ function BulkMail:AddDestination(dest)
 	local _ = autoSendRules[dest]  -- trigger the table creation by accessing it
 	destCache[dest] = true
 	table.insert(reverseDestCache, dest)
+	rulesAltered = true
 end
 
 function BulkMail:RemoveDestination(dest)
@@ -476,6 +544,7 @@ function BulkMail:RemoveDestination(dest)
 			break
 		end
 	end
+	rulesAltered = true
 end
 
 -- Simple function for adding include rules manually via itemlink or
@@ -502,6 +571,7 @@ function BulkMail:AddAutoSendRule(...)
 			self:Print("%s - %s", select(i, ...), dest)
 		end
 	end
+	rulesAltered = true
 end
 
 -- Sends the current item in the SendMailItemButton to the currently-specified
@@ -661,7 +731,7 @@ function BulkMail:ShowSendQueueGUI()
 				end
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
-				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_SendQueueTablet') end, 0.01) end)  -- WTF
+				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_SendQueueTablet') end, 0) end)  -- WTF
 			end
 		)
 	end
@@ -687,7 +757,8 @@ local shown = {}  -- keeps track of collapsed/expanded state in tablet
 local curRuleSet  -- for adding rules via the dewdrop
 local itemInputDDTable, itemTypesDDTable, pt3SetsDDTable, bagItemsDDTable  -- dewdrop tables
 
-local function createStaticARDTables()
+function createStaticARDTables()
+	if itemInputDDTable and itemTypesDDTable and pt3SetsDDTable then return end
 	-- User-specified item IDs
 	itemInputDDTable = {
 		text = L["Item ID"], hasArrow = true, hasEditBox = true,
@@ -697,6 +768,7 @@ local function createStaticARDTables()
 				local item = select(i, ...)
 				if GetItemInfo(item) then
 					table.insert(curRuleSet.items, tonumber(item))
+					rulesAltered = true
 				end
 			end
 			tablet:Refresh('BM_AutoSendEditTablet')
@@ -710,6 +782,7 @@ local function createStaticARDTables()
 			text = itype, hasArrow = #subtypes > 0, func = function()
 				table.insert(curRuleSet.itemTypes, {type = itype, subtype = #subtypes == 0 and itype})
 				tablet:Refresh('BM_AutoSendEditTablet')
+				rulesAltered = true
 			end
 		}
 		if #subtypes > 0 then
@@ -720,6 +793,7 @@ local function createStaticARDTables()
 					text = isubtype, func = function()
 						table.insert(curRuleSet.itemTypes, {type = itype, subtype = isubtype})
 						tablet:Refresh('BM_AutoSendEditTablet')
+						rulesAltered = true
 					end
 				}
 			end
@@ -741,6 +815,7 @@ local function createStaticARDTables()
 					func = function()
 						table.insert(curRuleSet.pt3Sets, path)
 						tablet:Refresh('BM_AutoSendEditTablet')
+						rulesAltered = true
 					end
 				}
 			end
@@ -750,27 +825,31 @@ local function createStaticARDTables()
 	end
 end
 
-local function updateDynamicARDTables()
+bagItemsDDTable = new()
+local dupeCheck = new()
+function updateDynamicARDTables()
+	bagItemsDDTable = deepDel(bagItemsDDTable)
+	for k in pairs(dupeCheck) do dupeCheck[k] = nil end
 	-- Mailable items in bags
-	bagItemsDDTable = {
-		text = L["Items from Bags"], hasArrow = true, subMenu = {},
-		tooltipTitle = L["Bag Items"], tooltipText = L["Mailable items in your bags."]
-	}
-	local dupeCheck = {}
+	bagItemsDDTable = newHash(
+		'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
+		'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
+	)
 	for bag, slot, item in bagIter() do
 		local itemID = tonumber(string.match(item or '', "item:(%d+)"))
 		if itemID and not dupeCheck[itemID] then
 			dupeCheck[itemID] = true
 			gratuity:SetBagItem(bag, slot)
 			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
-				table.insert(bagItemsDDTable.subMenu, {
-					text = select(2, GetItemInfo(itemID)),
-					checked = true, checkIcon = select(10, GetItemInfo(itemID)),
-					func = function()
+				table.insert(bagItemsDDTable.subMenu, newHash(
+					'text', select(2, GetItemInfo(itemID)),
+					'checked', true, 'checkIcon', select(10, GetItemInfo(itemID)),
+					'func', function()
 						table.insert(curRuleSet.items, itemID)
 						tablet:Refresh('BM_AutoSendEditTablet')
+						rulesAltered = true
 					end
-				})
+				))
 			end
 		end
 	end
@@ -786,8 +865,12 @@ function BulkMail:RegisterAddRuleDewdrop()
 	)
 end
 
-local function fillAutoSendEditTablet()
+local argTable = {}
+local args = {}
+function fillAutoSendEditTablet()
 	local cat
+	for k in pairs(args) do args[k] = nil end
+	for k in pairs(argTable) do argTable[k] = nil end
 	-- rules list prototype; used for listing both include- and exclude rules
 	local function listRules(ruleset)
 		if not ruleset or not next(ruleset) then
@@ -796,15 +879,17 @@ local function fillAutoSendEditTablet()
 		end
 		for ruletype, rules in pairs(ruleset) do
 			for k, rule in ipairs(rules) do
-				local args = {
-					text = tostring(rule), textR = 1, textG = 1, textB = 1, indentation = 20,
-					func = function(ruleset, id)
-						if IsAltKeyDown() then
-							table.remove(rules, k)
-							tablet:Refresh('BM_AutoSendEditTablet')
-						end
-					end, arg1 = rules, arg2 = k,
-				}
+				args.text, args.textR, args.textG, args.textB = tostring(rule), 1, 1, 1
+				args.indentation = 20
+				args.hasCheck = false
+				args.func = function(ruleset, id)
+					if IsAltKeyDown() then
+						table.remove(rules, k)
+						tablet:Refresh('BM_AutoSendEditTablet')
+						rulesAltered = true
+					end
+				end
+				args.arg1, args.args2 = rules, k
 				if ruletype == 'items' then
 					args.text = select(2, GetItemInfo(rule))
 					args.hasCheck = true
@@ -821,7 +906,6 @@ local function fillAutoSendEditTablet()
 					args.text = string.format("PT3 Set: %s", rule)
 					args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
 				end
-				local argTable = {}
 				for arg, val in pairs(args) do
 					table.insert(argTable, arg)
 					table.insert(argTable, val)
@@ -890,13 +974,14 @@ local function fillAutoSendEditTablet()
 
 	cat = tablet:AddCategory('id', "actions")
 	cat:AddLine('text', L["New Destination"], 'func', function() StaticPopup_Show("BULKMAIL_ADD_DESTINATION") end)
-	cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_AutoSendEditTablet') end, 0.01) end)  -- WTF
+	cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_AutoSendEditTablet') end, 0) end)  -- WTF
 	tablet:SetHint(L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."])
 end
 
+local dataTable = {}
 function BulkMail:RegisterAutoSendEditTablet()
 	tablet:Register('BM_AutoSendEditTablet',
-		'children', fillAutoSendEditTablet, 'data', {},
+		'children', fillAutoSendEditTablet, 'data', dataTable,
 		'cantAttach', true, 'clickable', true,
 		'showTitleWhenDetached', true, 'showHintWhenDetached', true,
 		'dontHook', true, 'strata', "DIALOG"
@@ -930,6 +1015,7 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	EditBoxOnEnterPressed = function()
 		BulkMail:AddDestination(_G[this:GetParent():GetName().."EditBox"]:GetText())
 		tablet:Refresh('BM_AutoSendEditTablet')
+		rulesAltered = true
 		_G.this:GetParent():Hide()
 	end,
 	EditBoxOnEscapePressed = function()
@@ -944,6 +1030,7 @@ StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
 		BulkMail:RemoveDestination(confirmedDestToRemove)
 		tablet:Refresh('BM_AutoSendEditTablet')
 		confirmedDestToRemove = nil
+		rulesAltered = true
 	end,
 	OnHide = function()
 		confirmedDestToRemove = nil
