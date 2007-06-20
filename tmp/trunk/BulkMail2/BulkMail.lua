@@ -17,7 +17,7 @@ local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- var
 --[[----------------------------------------------------------------------------
   Table Handling
 ------------------------------------------------------------------------------]]
-local new, del, newHash, newSet
+local new, del, newHash, newSet, deepDel
 do
 	local list = setmetatable({}, {__mode='k'})
 	function new(...)
