@@ -1,5 +1,5 @@
 BulkMailInbox = AceLibrary('AceAddon-2.0'):new('AceDB-2.0', 'AceEvent-2.0', 'AceHook-2.1', 'AceConsole-2.0')
-
+local self, BulkMailInbox = BulkMailInbox, BulkMailInbox
 local L = AceLibrary('AceLocale-2.2'):new('BulkMailInbox')
 BulkMailInbox.L = L
 
@@ -43,19 +43,6 @@ do
 		return t
 	end
 	
-	function newSet(...)
-		local t = next(list)
-		if t then
-			list[t] = nil
-		else
-			t = {}
-		end
-		for i = 1, select('#', ...) do
-			t[select(i, ...)] = true
-		end
-		return t
-	end
-
 	function del(t)
 		for k in pairs(t) do
 			t[k] = nil
@@ -71,7 +58,7 @@ end
 -- Build a table with info about all items and money in the Inbox
 inboxCache = new()
 local function inboxCacheBuild()
-	for k in ipairs(inboxCache) do del(inboxCache[k]) inboxCache[k] = nil end
+	for k in ipairs(inboxCache) do inboxCache[k] = del(inboxCache[k]) end
 	inboxCash = 0
 	for i = 1, GetInboxNumItems() do
 		_, _, sender, subject, money, cod, daysLeft, hasItem, _, wasReturned = GetInboxHeaderInfo(i)
