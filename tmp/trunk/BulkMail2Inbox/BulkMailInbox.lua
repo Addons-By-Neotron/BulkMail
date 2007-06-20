@@ -179,7 +179,7 @@ function BulkMailInbox:MAIL_SHOW()
 	self:SecureHookScript(MailFrameTab1, 'OnClick', 'ShowInboxGUI')
 	self:SecureHookScript(MailFrameTab2, 'OnClick', 'HideInboxGUI')
 
-	self:RefreshInboxGUI()
+	self:ShowInboxGUI()
 end
 
 function BulkMailInbox:MAIL_CLOSED()
