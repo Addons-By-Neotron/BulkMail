@@ -1,4 +1,5 @@
 BulkMail = AceLibrary('AceAddon-2.0'):new('AceDB-2.0', 'AceEvent-2.0', 'AceHook-2.1', 'AceConsole-2.0')
+local self, BulkMail = BulkMail, BulkMail
 
 local L = AceLibrary('AceLocale-2.2'):new('BulkMail')
 BulkMail.L = L
