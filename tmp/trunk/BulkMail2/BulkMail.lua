@@ -182,7 +182,7 @@ local function rulesCacheDest(item)
 			local xrules = autoSendRules[canddest].exclude
 			for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
 			for _, xset in ipairs(xrules.pt3Sets) do
-				if pt:ItemInSet(itemID, xset) then canddest = nil end
+				if pt:ItemInSet(itemID, xset) == true then canddest = nil end
 			end
 		end
 		rdest = canddest or rdest
@@ -584,6 +584,7 @@ function BulkMail:Send(cod)
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
+			suffix = suffix.."\255"
 			_G.this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
@@ -604,7 +605,6 @@ function BulkMail:Send(cod)
 			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
 		end
 		SendMailSubjectEditBox:SetText(SendMailSubjectEditBox:GetText()..suffix)
-		suffix = suffix..suffix
 		if cod then
 			SendMailSendMoneyButton:SetChecked(nil)
 			MoneyInputFrame_SetCopper(SendMailMoney, cod)
