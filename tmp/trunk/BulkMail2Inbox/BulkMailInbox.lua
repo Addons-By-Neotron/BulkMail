@@ -9,7 +9,7 @@ local abacus = AceLibrary('Abacus-2.0')
 local _G = getfenv(0)
 
 local sortFields, inboxCache, markTable  -- tables
-local ibIndex, ibChanged, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
+local ibIndex, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
 
 --[[----------------------------------------------------------------------------
   Table Handling
@@ -108,6 +108,7 @@ function BulkMailInbox:OnInitialize()
 
 	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
 	markTable = new()
+	inboxCash = 0
 
 	self.opts = {
 		type = 'group',
@@ -159,6 +160,7 @@ function BulkMailInbox:OnEnable()
 	if MailFrame:IsVisible() then
 		self:MAIL_SHOW()
 	end
+	self:RegisterInboxGUI()
 end
 
 function BulkMailInbox:OnDisable()
@@ -170,7 +172,6 @@ end
   Events
 ------------------------------------------------------------------------------]]
 function BulkMailInbox:MAIL_SHOW()
-	ibChanged = GetTime()
 	ibIndex = GetInboxNumItems()
 
 	self:SecureHook('CheckInbox', 'RefreshInboxGUI')
@@ -196,7 +197,7 @@ end
 
 -- Take next inbox item or money; skip past COD items and letters.
 function BulkMailInbox:MAIL_INBOX_UPDATE()
-	if not takeAllInProgress then return self:RefreshInboxGUI() end
+	if not takeAllInProgress then return self:ScheduleEvent('BMI_RefreshInboxGUI', self.RefreshInboxGUI, 1, self) end
 
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
@@ -218,7 +219,6 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 
 	if money > 0 then
 		cleanPass = false
-		ibChanged = GetTime()
 		return TakeInboxMoney(ibIndex)
 	end
 
@@ -227,7 +227,6 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		return self:MAIL_INBOX_UPDATE()
 	else
 		cleanPass = false
-		ibChanged = GetTime()
 		ibIndex = ibIndex - 1
 		return TakeInboxItem(ibIndex + 1)
 	end
@@ -258,8 +257,8 @@ function BulkMailInbox:InboxFrame_OnClick(index, ...)
 		elseif hasItem then TakeInboxItem(index) end
 	elseif self.db.char.ctrlRet and IsControlKeyDown() and not wasReturned and canReply then ReturnInboxItem(index)
 	elseif self.db.char.altDel and IsAltKeyDown() then DeleteInboxItem(index)
-	else return self.hooks.InboxFrame_OnClick(index, ...) end
-	ibChanged = GetTime()
+	else self.hooks.InboxFrame_OnClick(index, ...) end
+	self:ScheduleEvent(self.RefreshInboxGUI, 0.25, self)
 end
 
 --[[----------------------------------------------------------------------------
@@ -282,12 +281,11 @@ function BulkMailInbox:UpdateTakeAllButton()
 end
 
 -- Inbox Items GUI
-function BulkMailInbox:UpdateInboxGUI()
+function BulkMailInbox:RegisterInboxGUI()
 	if not self.db.char.inboxUI then return self:HideInboxGUI() end
 	if not tablet:IsRegistered('BMI_InboxTablet') then
 		tablet:Register('BMI_InboxTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH", 'maxHeight', 850,
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
-				inboxCacheBuild()
 				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d mails, %s)"], GetInboxNumItems(), abacus:FormatMoneyShort(inboxCash)))
 				local hlcol = 'text'..self.db.char.sortField
 				local cat = tablet:AddCategory('columns', 6,
@@ -364,18 +362,17 @@ function BulkMailInbox:UpdateInboxGUI()
 			end
 		)
 	end
-	self:ShowInboxGUI()
-	ibChanged = GetTime()
-	self:ScheduleEvent('BMI_UpdateGUIEvent', self.RefreshInboxGUI, 2.5, self)
 end
 
 function BulkMailInbox:ShowInboxGUI()
 	if not self.db.char.inboxUI then return end
-	if tablet:IsRegistered('BMI_InboxTablet') then
-		tablet:Open('BMI_InboxTablet')
-	else
+	if not tablet:IsRegistered('BMI_InboxTablet') then
+		self:RegisterInboxGUI()
+	end
+	if not inboxCache or not next(inboxCache) then
 		self:RefreshInboxGUI()
 	end
+	tablet:Open('BMI_InboxTablet')
 end
 
 function BulkMailInbox:HideInboxGUI()
@@ -386,9 +383,9 @@ end
 
 function BulkMailInbox:RefreshInboxGUI()
 	if not self.db.char.inboxUI then return end
-	if tablet:IsRegistered('BMI_InboxTablet') then
-		tablet:Refresh('BMI_InboxTablet')
-	else
-		self:UpdateInboxGUI()
+	if not tablet:IsRegistered('BMI_InboxTablet') then
+		self:RegisterInboxGUI()
 	end
+	inboxCacheBuild()
+	tablet:Refresh('BMI_InboxTablet')
 end
