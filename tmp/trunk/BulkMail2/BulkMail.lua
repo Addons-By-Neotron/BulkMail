@@ -778,11 +778,11 @@ end
   AutoSend Edit GUI
 ------------------------------------------------------------------------------]]
 local shown = {}  -- keeps track of collapsed/expanded state in tablet
-local curRuleSet = new() -- for adding rules via the dewdrop
+local curRuleSet -- for adding rules via the dewdrop
 local itemInputDDTable, itemTypesDDTable, pt3SetsDDTable, bagItemsDDTable  -- dewdrop tables
 
-local function addRule(ruleset, value)
-	table.insert(ruleset, value)
+local function addRule(ruletype, value)
+	table.insert(curRuleSet[ruletype], value)
 	tablet:Refresh('BM_AutoSendEditTablet')
 	rulesAltered = true
 end
@@ -796,7 +796,7 @@ local function createStaticARDTables()
 			for i=1, select('#', ...) do
 				local item = select(i, ...)
 				if GetItemInfo(item) then
-					addRule(curRuleSet.items, tonumber(item))
+					addRule("items", tonumber(item))
 				end
 			end
 		end
@@ -805,12 +805,12 @@ local function createStaticARDTables()
 	-- Blizzard item types
 	itemTypesDDTable = newHash('text', L["Item Type"], 'hasArrow', true, 'subMenu', new())
 	for itype, subtypes in pairs(auctionItemClasses) do
-		itemTypesDDTable.subMenu[itype] = newHash('text', itype, 'hasArrow', #subtypes > 0, 'func', addRule, 'arg1', curRuleSet.itemTypes, 'arg2', newHash('type', itype, 'subtype', #subtypes == 0 and itype))
+		itemTypesDDTable.subMenu[itype] = newHash('text', itype, 'hasArrow', #subtypes > 0, 'func', addRule, 'arg1', "itemTypes", 'arg2', newHash('type', itype, 'subtype', #subtypes == 0 and itype))
 		if #subtypes > 0 then
 			local supertype = itemTypesDDTable.subMenu[itype]
 			supertype.subMenu = new()
 			for _, isubtype in ipairs(subtypes) do
-				supertype.subMenu[isubtype] = newHash('text', isubtype, 'func', addRule, 'arg1', curRuleSet.itemTypes, 'arg2', newHash('type', itype, 'subtype', isubtype))
+				supertype.subMenu[isubtype] = newHash('text', isubtype, 'func', addRule, 'arg1', "itemTypes", 'arg2', newHash('type', itype, 'subtype', isubtype))
 			end
 		end
 	end
@@ -822,11 +822,11 @@ local function createStaticARDTables()
 	local curmenu, prevmenu
 	for setname in pairs(sets) do
 		for k in ipairs(pathtable) do pathtable[k] = nil end
-		curmenu, prevmenu = pt3SetsDDTable.subMenu
+		curmenu = pt3SetsDDTable.subMenu
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
 			if not curmenu[cat] then
-				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', curRuleSet.pt3sets, 'arg2', table.concat(pathtable))
+				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', "pt3Sets", 'arg2', table.concat(pathtable))
 			end
 			prevmenu, curmenu = curmenu[cat], curmenu[cat].subMenu
 		end
@@ -834,16 +834,15 @@ local function createStaticARDTables()
 	end
 end
 
-bagItemsDDTable = new()
+bagItemsDDTable = newHash(
+	'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
+	'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
+)
 local dupeCheck = new()
 local function updateDynamicARDTables()
-	bagItemsDDTable = deepDel(bagItemsDDTable)
 	for k in pairs(dupeCheck) do dupeCheck[k] = nil end
+	for k in ipairs(bagItemsDDTable.subMenu) do bagItemsDDTable.subMenu[k] = nil end
 	-- Mailable items in bags
-	bagItemsDDTable = newHash(
-		'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
-		'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
-	)
 	for bag, slot, item in bagIter() do
 		local itemID = tonumber(string.match(item or '', "item:(%d+)"))
 		if itemID and not dupeCheck[itemID] then
@@ -853,7 +852,7 @@ local function updateDynamicARDTables()
 				table.insert(bagItemsDDTable.subMenu, newHash(
 					'text', select(2, GetItemInfo(itemID)),
 					'checked', true, 'checkIcon', select(10, GetItemInfo(itemID)),
-					'func', addRule, 'arg1', curRuleSet.items, 'arg2', itemID
+					'func', addRule, 'arg1', "items", 'arg2', itemID
 				))
 			end
 		end
@@ -960,15 +959,11 @@ local function fillAutoSendEditTablet()
 			)
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
 			if shown[dest] then
-				-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)	
-				cat:AddLine('text', L["Include"], 'indentation', 10,
-					'func', includeFunc, 'arg1', rulesets.include
-				)
+				-- "include" rules for this destination; clicking brings up menu to add new include rules
+				cat:AddLine('text', L["Include"], 'indentation', 10, 'func', includeFunc, 'arg1', rulesets.include)
 				listRules(cat, rulesets.include)
-				-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules (not yet implemented)
-				cat:AddLine('text', L["Exclude"], 'indentation', 10,
-					'func', excludeFunc, 'arg1', rulesets.exclude
-				)
+				-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules
+				cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', excludeFunc, 'arg1', rulesets.exclude)
 				listRules(cat, rulesets.exclude)
 				cat:AddLine()
 				cat:AddLine()
