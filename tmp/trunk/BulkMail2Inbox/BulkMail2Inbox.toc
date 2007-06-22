@@ -6,7 +6,7 @@
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
 ## X-Website: http://hyperactiveChipmunk.wowinterface.com
-## SavedVariables: BulkMail2InboxDB, BulkMail2Fu
+## SavedVariables: BulkMail2InboxDB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, AbacusLib, FuBar, FuBarPlugin-2.0, BulkMail2
 ## X-Embeds: Ace2, TabletLib, DewdropLib, AbacusLib, FuBarPlugin-2.0
 ## LoadManagers: SupplyAndDemand, ForkliftGnome
