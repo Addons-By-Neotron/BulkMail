@@ -878,55 +878,94 @@ function BulkMail:RegisterAddRuleDewdrop()
 	)
 end
 
+local function headerClickFunc(dest)
+	if IsAltKeyDown() then
+		confirmedDestToRemove = dest
+		StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
+	else
+		shown[dest] = not shown[dest]
+	end
+	tablet:Refresh('BM_AutoSendEditTablet')
+end
+
+local function includeFunc(arg)
+	curRuleSet = arg
+	updateDynamicARDTables()
+	dewdrop:Open('BM_AddRuleDD')
+end
+
+local function exludeFunc(arg)
+	curRuleSet = arg
+	updateDynamicARDTables()
+	dewdrop:Open('BM_AddRuleDD')
+end
+
+local function globalExcludeFunc()
+	shown.globalExclude = not shown.globalExclude
+	tablet:Refresh('BM_AutoSendEditTablet')
+end
+
+local function newDest()
+	StaticPopup_Show("BULKMAIL_ADD_DESTINATION")
+end
+
+local function tabletClose()
+	tablet:Close('BM_AutoSendEditTablet')
+end
+local function uiClose()
+	BulkMail:ScheduleEvent(tabletClose, 0)
+end
+
 local argTable = {}
 local args = {}
-function fillAutoSendEditTablet()
+local function listRules(category, ruleset)
+	if not ruleset or not next(ruleset) then
+		category:AddLine('text', L["None"], 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
+		return
+	end
+	for ruletype, rules in pairs(ruleset) do
+		for k, rule in ipairs(rules) do
+			args.text, args.textR, args.textG, args.textB = tostring(rule), 1, 1, 1
+			args.indentation = 20
+			args.hasCheck = false
+			args.func = function(ruleset, id)
+				if IsAltKeyDown() then
+					table.remove(rules, k)
+					tablet:Refresh('BM_AutoSendEditTablet')
+					rulesAltered = true
+				end
+			end
+			args.arg1, args.args2 = rules, k
+			if ruletype == 'items' then
+				args.text = select(2, GetItemInfo(rule))
+				args.hasCheck = true
+				args.checked = true
+				args.checkIcon = select(10, GetItemInfo(rule))
+			elseif ruletype == 'itemTypes' then
+				if rule.subtype and rule.subtype ~= rule.type then
+					args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
+				else
+					args.text = string.format("Item Type: %s", rule.type)
+				end
+				args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
+			elseif ruletype == 'pt3Sets' then
+				args.text = string.format("PT3 Set: %s", rule)
+				args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
+			end
+			for arg, val in pairs(args) do
+				table.insert(argTable, arg)
+				table.insert(argTable, val)
+			end
+			category:AddLine(unpack(argTable))
+		end
+	end
+end
+
+local function fillAutoSendEditTablet()
 	local cat
 	for k in pairs(args) do args[k] = nil end
 	for k in pairs(argTable) do argTable[k] = nil end
 	-- rules list prototype; used for listing both include- and exclude rules
-	local function listRules(ruleset)
-		if not ruleset or not next(ruleset) then
-			cat:AddLine('text', L["None"], 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
-			return
-		end
-		for ruletype, rules in pairs(ruleset) do
-			for k, rule in ipairs(rules) do
-				args.text, args.textR, args.textG, args.textB = tostring(rule), 1, 1, 1
-				args.indentation = 20
-				args.hasCheck = false
-				args.func = function(ruleset, id)
-					if IsAltKeyDown() then
-						table.remove(rules, k)
-						tablet:Refresh('BM_AutoSendEditTablet')
-						rulesAltered = true
-					end
-				end
-				args.arg1, args.args2 = rules, k
-				if ruletype == 'items' then
-					args.text = select(2, GetItemInfo(rule))
-					args.hasCheck = true
-					args.checked = true
-					args.checkIcon = select(10, GetItemInfo(rule))
-				elseif ruletype == 'itemTypes' then
-					if rule.subtype and rule.subtype ~= rule.type then
-						args.text = string.format("Item Type: %s - %s", rule.type, rule.subtype)
-					else
-						args.text = string.format("Item Type: %s", rule.type)
-					end
-					args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
-				elseif ruletype == 'pt3Sets' then
-					args.text = string.format("PT3 Set: %s", rule)
-					args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
-				end
-				for arg, val in pairs(args) do
-					table.insert(argTable, arg)
-					table.insert(argTable, val)
-				end
-				cat:AddLine(unpack(argTable))
-			end
-		end
-	end
 
 	tablet:SetTitle(L["AutoSend Rules"])
 	-- categories; one per destination character
@@ -936,37 +975,22 @@ function fillAutoSendEditTablet()
 			cat = tablet:AddCategory(
 				'id', dest, 'text', dest, 'showWithoutChildren', true, 'hideBlankLine', true,
 				'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown[dest] and "Minus" or "Plus"),
-				'func', function(dest)
-					if IsAltKeyDown() then
-						confirmedDestToRemove = dest
-						StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
-					else
-						shown[dest] = not shown[dest]
-					end
-					tablet:Refresh('BM_AutoSendEditTablet')
-				end, 'arg1', dest
+				'func', headerClickFunc, 'arg1', dest
 			)
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
 			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules (not yet implemented)	
 				cat:AddLine('text', L["Include"], 'indentation', 10,
-					'func', function()
-						curRuleSet = rulesets.include
-						updateDynamicARDTables()
-						dewdrop:Open('BM_AddRuleDD')
-					end
-				) 
-				listRules(rulesets.include)
+					'func', includeFunc, 'arg1', rulesets.include
+				)
+				listRules(cat, rulesets.include)
 				-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules (not yet implemented)
 				cat:AddLine('text', L["Exclude"], 'indentation', 10,
-					'func', function()
-						curRuleSet = rulesets.exclude
-						updateDynamicARDTables()
-						dewdrop:Open('BM_AddRuleDD')
-					end
+					'func', excludeFunc, 'arg1', rulesets.exclude
 				)
-				listRules(rulesets.exclude)
-				cat:AddLine()cat:AddLine()
+				listRules(cat, rulesets.exclude)
+				cat:AddLine()
+				cat:AddLine()
 			end
 		end
 	end
@@ -975,19 +999,16 @@ function fillAutoSendEditTablet()
 	cat = tablet:AddCategory(
 		'id', "globalExclude", 'text', L["Global Exclude"], 'showWithoutChildren', true, 'hideBlankLine', true,
 		'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown[dest] and "Minus" or "Plus"),
-		'func', function()
-			shown.globalExclude = not shown.globalExclude
-			tablet:Refresh('BM_AutoSendEditTablet')
-		end
+		'func', globalExcludeFunc
 	)
 	if shown.globalExclude then
 		cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', function() curRuleSet = globalExclude dewdrop:Open('BM_AddRuleDD') end)
-		listRules(globalExclude)
+		listRules(cat, globalExclude)
 	end
 
 	cat = tablet:AddCategory('id', "actions")
-	cat:AddLine('text', L["New Destination"], 'func', function() StaticPopup_Show("BULKMAIL_ADD_DESTINATION") end)
-	cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_AutoSendEditTablet') end, 0) end)  -- WTF
+	cat:AddLine('text', L["New Destination"], 'func', newDest)
+	cat:AddLine('text', L["Close"], 'func', uiClose)
 	tablet:SetHint(L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."])
 end
 
