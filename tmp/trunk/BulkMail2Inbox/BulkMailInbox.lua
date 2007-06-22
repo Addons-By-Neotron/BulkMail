@@ -185,6 +185,7 @@ end
 
 function BulkMailInbox:MAIL_CLOSED()
 	self:HideInboxGUI()
+	GameTooltip:Hide()
 	self:UnhookAll()
 end
 BulkMailInbox.PLAYER_ENTERING_WORLD = BulkMailInbox.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
