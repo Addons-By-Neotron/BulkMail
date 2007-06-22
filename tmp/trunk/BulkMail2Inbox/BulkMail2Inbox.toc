@@ -5,7 +5,7 @@
 ## Author: hyperactiveChipmunk
 ## X-Category: Mail
 ## X-eMail: hyperactiveChipmunk@gmail.com
-## X-Website: http://hyperactiveChipmunk.wowinterface.com
+## X-Website: http://wowace.com/wiki/BulkMail2Inbox
 ## SavedVariables: BulkMail2InboxDB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, AbacusLib, FuBar, FuBarPlugin-2.0, BulkMail2
 ## X-Embeds: Ace2, TabletLib, DewdropLib, AbacusLib, FuBarPlugin-2.0
