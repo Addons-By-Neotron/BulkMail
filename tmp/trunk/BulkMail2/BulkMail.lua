@@ -171,7 +171,7 @@ local function rulesCacheDest(item)
 	local itemID = type(item) == 'number' and item or tonumber(string.match(item, "item:(%d+)"))
 	for _, xID in ipairs(globalExclude.items) do if itemID == xID then return end end
 	for _, xset in ipairs(globalExclude.pt3Sets) do
-		if pt:ItemInSet(itemID, xset) then return end
+		if pt:ItemInSet(itemID, xset) == true then return end
 	end
 
 	local itype, isubtype = select(6, GetItemInfo(itemID))
