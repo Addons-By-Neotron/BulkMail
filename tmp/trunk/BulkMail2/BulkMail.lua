@@ -826,7 +826,7 @@ local function createStaticARDTables()
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
 			if not curmenu[cat] then
-				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', "pt3Sets", 'arg2', table.concat(pathtable))
+				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', "pt3Sets", 'arg2', table.concat(pathtable, '.'))
 			end
 			prevmenu, curmenu = curmenu[cat], curmenu[cat].subMenu
 		end
