@@ -202,8 +202,10 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
+		inboxCacheBuild()
 		if cleanPass or numItems <= 0 then
 			takeAllInProgress = false
+			self:RefreshInboxGUI()
 			return
 		else
 			ibIndex = numItems
@@ -290,7 +292,7 @@ function BulkMailInbox:RegisterInboxGUI()
 				tablet:SetTitle(string.format(L["BulkMailInbox -- Inbox Items (%d mails, %s)"], GetInboxNumItems(), abacus:FormatMoneyShort(inboxCash)))
 				local hlcol = 'text'..self.db.char.sortField
 				local cat = tablet:AddCategory('columns', 6,
-					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 end,
+					'func', function() self.db.char.sortField = sortFields[self.db.char.sortField+1] and self.db.char.sortField+1 or 1 self:RefreshInboxGUI() end,
 					'text', L["Items (Inbox click actions apply)"],
 					'text2', L["Qty."],
 					'text3', L["Money"],
