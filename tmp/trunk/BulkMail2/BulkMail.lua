@@ -399,6 +399,18 @@ function BulkMail:OnInitialize()
 		},
 	}
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, self.opts)
+
+	-- LoD PT3 Sets; yanked from Baggins
+	local PT3Modules
+	for i = 1, GetNumAddOns() do
+		local metadata = GetAddOnMetadata(i, "X-PeriodicTable-3.0-Module")
+		if metadata then
+			local name, _, _, enabled = GetAddOnInfo(i)
+			if enabled then
+				LoadAddOn(name)
+			end
+		end
+	end
 end
 
 function BulkMail:OnEnable()
