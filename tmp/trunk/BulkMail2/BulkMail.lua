@@ -351,6 +351,7 @@ function BulkMail:OnInitialize()
 	end
 
 	numItems = 0
+	rulesAltered = true
 	
 	self.opts = {
 		type = 'group',
@@ -437,7 +438,7 @@ end
   Events
 ------------------------------------------------------------------------------]]
 function BulkMail:MAIL_SHOW()
-	rulesCacheBuild()
+	if rulesAltered then rulesCacheBuild() end
 	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
@@ -590,13 +591,13 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
-local suffix = "\255"
+local suffix = "\255"  -- for ensuring subject uniqueness to help BMI's "Selected" features
 function BulkMail:Send(cod)
 	if StaticPopup_Visible('SEND_MONEY') then return end
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
-			suffix = suffix.."\255"
+			if #suffix > 10 then suffix = "\255" else suffix = suffix.."\255" end
 			_G.this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
@@ -719,18 +720,21 @@ function BulkMail:ShowSendQueueGUI()
 					'showWithoutChildren', true, 'child_indentation', 5)
 				
 				if sendCache and next(sendCache) then
+					local itemLink, itemText, texture, qty
 					for bag, slots in pairs(sendCache) do
 						for slot in pairs(slots) do
-							local itemLink = GetContainerItemLink(bag, slot)
-							local itemText = itemLink and GetItemInfo(itemLink)
-							local texture, qty = GetContainerItemInfo(bag, slot)
-							if qty and qty > 1 then
-								itemText = string.format("%s(%d)", itemText, qty)
-							end						
-							cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
-								'checked', true, 'hasCheck', true, 'checkIcon', texture,
-								'func', onSendQueueItemSelect, 'arg1', bag, 'arg2', slot
-							)
+							itemLink = GetContainerItemLink(bag, slot)
+							if itemLink then
+								itemText = GetItemInfo(itemLink)
+								texture, qty = GetContainerItemInfo(bag, slot)
+								if qty and qty > 1 then
+									itemText = string.format("%s(%d)", itemText, qty)
+								end						
+								cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
+									'checked', true, 'hasCheck', true, 'checkIcon', texture,
+									'func', onSendQueueItemSelect, 'arg1', bag, 'arg2', slot
+								)
+							end
 						end
 					end
 				else
