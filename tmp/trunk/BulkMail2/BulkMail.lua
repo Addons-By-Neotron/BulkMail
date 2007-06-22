@@ -663,6 +663,13 @@ end
 --[[----------------------------------------------------------------------------
   Mailbox SendQueue GUI (original Tablet conversion by Kemayo)
 ------------------------------------------------------------------------------]]
+local function tabletClose(tabletID)
+	tablet:Close(tabletID)
+end
+local function uiClose(tabletID)
+	BulkMail:ScheduleEvent(tabletClose, 0, tabletID)
+end
+
 local function getLockedContainerItem()
 	for bag=0, NUM_BAG_SLOTS do
 		for slot=1, GetContainerNumSlots(bag) do
@@ -698,6 +705,10 @@ local function onDropClick()
 	BulkMail:RefreshSendQueueGUI()
 end
 
+local function onSendClick()
+	if sendCache then BulkMail:SendMailMailButton_OnClick() end
+end
+
 function BulkMail:ShowSendQueueGUI()
 	if not tablet:IsRegistered('BM_SendQueueTablet') then
 		tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
@@ -731,9 +742,9 @@ function BulkMail:ShowSendQueueGUI()
 				
 				if sendCache and next(sendCache) then
 					cat = tablet:AddCategory('columns', 1)
-					cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup, 'arg1')
+					cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup)
 					if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
-						cat:AddLine('text', L["Send"], 'func', function() if sendCache then BulkMail:SendMailMailButton_OnClick() end end)
+						cat:AddLine('text', L["Send"], 'func', onSendClick)
 					else
 						cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
 					end
@@ -744,7 +755,7 @@ function BulkMail:ShowSendQueueGUI()
 				end
 				cat = tablet:AddCategory('columns', 1)
 				cat:AddLine()
-				cat:AddLine('text', L["Close"], 'func', function() BulkMail:ScheduleEvent(function() tablet:Close('BM_SendQueueTablet') end, 0) end)  -- WTF
+				cat:AddLine('text', L["Close"], 'func', uiClose, 'arg1', 'BM_SendQueueTablet')
 			end
 		)
 	end
@@ -767,70 +778,55 @@ end
   AutoSend Edit GUI
 ------------------------------------------------------------------------------]]
 local shown = {}  -- keeps track of collapsed/expanded state in tablet
-local curRuleSet  -- for adding rules via the dewdrop
+local curRuleSet = new() -- for adding rules via the dewdrop
 local itemInputDDTable, itemTypesDDTable, pt3SetsDDTable, bagItemsDDTable  -- dewdrop tables
 
-function createStaticARDTables()
+local function addRule(ruleset, value)
+	table.insert(ruleset, value)
+	tablet:Refresh('BM_AutoSendEditTablet')
+	rulesAltered = true
+end
+
+local function createStaticARDTables()
 	if itemInputDDTable and itemTypesDDTable and pt3SetsDDTable then return end
 	-- User-specified item IDs
-	itemInputDDTable = {
-		text = L["Item ID"], hasArrow = true, hasEditBox = true,
-		tooltipTitle = L["ItemID(s)"], tooltipText = L["Usage: <itemID> [itemID2, ...]"],
-		editBoxFunc = function(...)
+	itemInputDDTable = newHash('text', L["Item ID"], 'hasArrow', true, 'hasEditBox', true,
+		'tooltipTitle', L["ItemID(s)"], 'tooltipText', L["Usage: <itemID> [itemID2, ...]"],
+		'editBoxFunc', function(...)
 			for i=1, select('#', ...) do
 				local item = select(i, ...)
 				if GetItemInfo(item) then
-					table.insert(curRuleSet.items, tonumber(item))
-					rulesAltered = true
+					addRule(curRuleSet.items, tonumber(item))
 				end
 			end
-			tablet:Refresh('BM_AutoSendEditTablet')
 		end
-	}
+	)
 
 	-- Blizzard item types
-	itemTypesDDTable = { text = L["Item Type"], hasArrow = true, subMenu = {} }
+	itemTypesDDTable = newHash('text', L["Item Type"], 'hasArrow', true, 'subMenu', new())
 	for itype, subtypes in pairs(auctionItemClasses) do
-		itemTypesDDTable.subMenu[itype] = {
-			text = itype, hasArrow = #subtypes > 0, func = function()
-				table.insert(curRuleSet.itemTypes, {type = itype, subtype = #subtypes == 0 and itype})
-				tablet:Refresh('BM_AutoSendEditTablet')
-				rulesAltered = true
-			end
-		}
+		itemTypesDDTable.subMenu[itype] = newHash('text', itype, 'hasArrow', #subtypes > 0, 'func', addRule, 'arg1', curRuleSet.itemTypes, 'arg2', newHash('type', itype, 'subtype', #subtypes == 0 and itype))
 		if #subtypes > 0 then
 			local supertype = itemTypesDDTable.subMenu[itype]
-			supertype.subMenu = {}
+			supertype.subMenu = new()
 			for _, isubtype in ipairs(subtypes) do
-				supertype.subMenu[isubtype] = {
-					text = isubtype, func = function()
-						table.insert(curRuleSet.itemTypes, {type = itype, subtype = isubtype})
-						tablet:Refresh('BM_AutoSendEditTablet')
-						rulesAltered = true
-					end
-				}
+				supertype.subMenu[isubtype] = newHash('text', isubtype, 'func', addRule, 'arg1', curRuleSet.itemTypes, 'arg2', newHash('type', itype, 'subtype', isubtype))
 			end
 		end
 	end
 
 	-- PeriodicTable-3.0 sets
-	pt3SetsDDTable = { text = L["Periodic Table Set"], hasArrow = true, subMenu = {} }
+	pt3SetsDDTable = newHash('text', L["Periodic Table Set"], 'hasArrow', true, 'subMenu', new())
 	local sets = pt:getUpgradeData()
+	local pathtable = new()
+	local curmenu, prevmenu
 	for setname in pairs(sets) do
-		local curmenu, prevmenu = pt3SetsDDTable.subMenu
-		local pathtable = {}
+		for k in ipairs(pathtable) do pathtable[k] = nil end
+		curmenu, prevmenu = pt3SetsDDTable.subMenu
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
 			if not curmenu[cat] then
-				local path = table.concat(pathtable, ".")
-				curmenu[cat] = {
-					text = cat,	hasArrow = true, subMenu = {}, 
-					func = function()
-						table.insert(curRuleSet.pt3Sets, path)
-						tablet:Refresh('BM_AutoSendEditTablet')
-						rulesAltered = true
-					end
-				}
+				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', curRuleSet.pt3sets, 'arg2', table.concat(pathtable))
 			end
 			prevmenu, curmenu = curmenu[cat], curmenu[cat].subMenu
 		end
@@ -840,7 +836,7 @@ end
 
 bagItemsDDTable = new()
 local dupeCheck = new()
-function updateDynamicARDTables()
+local function updateDynamicARDTables()
 	bagItemsDDTable = deepDel(bagItemsDDTable)
 	for k in pairs(dupeCheck) do dupeCheck[k] = nil end
 	-- Mailable items in bags
@@ -857,11 +853,7 @@ function updateDynamicARDTables()
 				table.insert(bagItemsDDTable.subMenu, newHash(
 					'text', select(2, GetItemInfo(itemID)),
 					'checked', true, 'checkIcon', select(10, GetItemInfo(itemID)),
-					'func', function()
-						table.insert(curRuleSet.items, itemID)
-						tablet:Refresh('BM_AutoSendEditTablet')
-						rulesAltered = true
-					end
+					'func', addRule, 'arg1', curRuleSet.items, 'arg2', itemID
 				))
 			end
 		end
@@ -872,10 +864,7 @@ function BulkMail:RegisterAddRuleDewdrop()
 	-- Create table for Dewdrop and register
 	createStaticARDTables()
 	updateDynamicARDTables()
-	dewdrop:Register('BM_AddRuleDD', 'children', function() 
-			dewdrop:FeedTable({ {text = L["Add rule"], isTitle = true}, bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable })
-		end, 'cursorX', true, 'cursorY', true
-	)
+	dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
 end
 
 local function headerClickFunc(dest)
@@ -909,16 +898,12 @@ local function newDest()
 	StaticPopup_Show("BULKMAIL_ADD_DESTINATION")
 end
 
-local function tabletClose()
-	tablet:Close('BM_AutoSendEditTablet')
-end
-local function uiClose()
-	BulkMail:ScheduleEvent(tabletClose, 0)
-end
-
+-- rules list prototype; used for listing both include- and exclude rules
 local argTable = {}
 local args = {}
 local function listRules(category, ruleset)
+	for k in pairs(args) do args[k] = nil end
+	for k in pairs(argTable) do argTable[k] = nil end
 	if not ruleset or not next(ruleset) then
 		category:AddLine('text', L["None"], 'indentation', 20, 'textR', 1, 'textG', 1, 'textB', 1)
 		return
@@ -963,10 +948,6 @@ end
 
 local function fillAutoSendEditTablet()
 	local cat
-	for k in pairs(args) do args[k] = nil end
-	for k in pairs(argTable) do argTable[k] = nil end
-	-- rules list prototype; used for listing both include- and exclude rules
-
 	tablet:SetTitle(L["AutoSend Rules"])
 	-- categories; one per destination character
 	for dest, rulesets in pairs(autoSendRules) do
@@ -1008,7 +989,7 @@ local function fillAutoSendEditTablet()
 
 	cat = tablet:AddCategory('id', "actions")
 	cat:AddLine('text', L["New Destination"], 'func', newDest)
-	cat:AddLine('text', L["Close"], 'func', uiClose)
+	cat:AddLine('text', L["Close"], 'func', uiClose, 'arg1', 'BM_AutoSendEditTablet')
 	tablet:SetHint(L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."])
 end
 
