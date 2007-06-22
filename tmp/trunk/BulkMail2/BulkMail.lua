@@ -894,7 +894,7 @@ local function includeFunc(arg)
 	dewdrop:Open('BM_AddRuleDD')
 end
 
-local function exludeFunc(arg)
+local function excludeFunc(arg)
 	curRuleSet = arg
 	updateDynamicARDTables()
 	dewdrop:Open('BM_AddRuleDD')
