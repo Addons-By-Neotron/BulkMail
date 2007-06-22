@@ -2,14 +2,18 @@ if BulkMailFu then return end
 BulkMailFu = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "FuBarPlugin-2.0")
 local L = BulkMail and BulkMail.L or BulkMailInbox.L
 
-BulkMailFu:RegisterDB("BulkMail2Fu")
-BulkMailFu.hasIcon = true
-BulkMailFu.hideWithoutStandby = true
-BulkMailFu.hasNoText = true
-BulkMailFu.hasNoColor = true
-BulkMailFu.blizzardTooltip = true
-BulkMailFu.defaultPosition = "RIGHT"
-BulkMailFu.independentProfile = true
+function BulkMailFu:OnInitialize()
+	self:RegisterDB(BulkMail and "BulkMail2DB" or "BulkMail2InboxDB")
+	self:RegisterDefaults('profile', {})
+	self.hasIcon = true
+	self.hideWithoutStandby = true
+	self.hasNoText = true
+	self.hasNoColor = true
+	self.blizzardTooltip = true
+	self.defaultPosition = "RIGHT"
+	self.independentProfile = true
+	self:SetIcon(true)
+end
 
 function BulkMailFu:OnEnable()
 	self.opts = {}
