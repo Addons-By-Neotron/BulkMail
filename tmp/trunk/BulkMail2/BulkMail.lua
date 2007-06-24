@@ -229,6 +229,7 @@ local function sendCacheAdd(bag, slot, squelch)
 		bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
 	end
 	sendCache = sendCache or new()
+	BulkMail.sendCache = sendCache
 	if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
 		gratuity:SetBagItem(bag, slot)
 		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
@@ -425,6 +426,7 @@ function BulkMail:OnEnable()
 	if MailFrame:IsVisible() then
 		self:MAIL_SHOW()
 	end
+	self:RegisterSendQueueGUI()
 end
 
 function BulkMail:OnDisable()
@@ -710,7 +712,7 @@ local function onSendClick()
 	if sendCache then BulkMail:SendMailMailButton_OnClick() end
 end
 
-function BulkMail:ShowSendQueueGUI()
+function BulkMail:RegisterSendQueueGUI()
 	if not tablet:IsRegistered('BM_SendQueueTablet') then
 		tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
 			'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children', function()
@@ -763,9 +765,13 @@ function BulkMail:ShowSendQueueGUI()
 			end
 		)
 	end
+end
+function BulkMail:ShowSendQueueGUI()
+	if not tablet:IsRegistered('BM_SendQueueTablet') then
+		self:RegisterSendQueueGUI()
+	end
 	tablet:Open('BM_SendQueueTablet')
 end
-
 function BulkMail:HideSendQueueGUI()
 	if tablet:IsRegistered('BM_SendQueueTablet') then
 		tablet:Close('BM_SendQueueTablet')
@@ -773,9 +779,10 @@ function BulkMail:HideSendQueueGUI()
 end
 
 function BulkMail:RefreshSendQueueGUI()
-	if tablet:IsRegistered('BM_SendQueueTablet') then
-		tablet:Refresh('BM_SendQueueTablet')
+	if not tablet:IsRegistered('BM_SendQueueTablet') then
+		self:RegisterSendQueueGUI()
 	end
+	tablet:Refresh('BM_SendQueueTablet')
 end
 
 --[[----------------------------------------------------------------------------
