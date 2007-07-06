@@ -222,7 +222,8 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 
 	if money > 0 then
 		cleanPass = false
-		return TakeInboxMoney(ibIndex)
+		TakeInboxMoney(ibIndex)
+		return self:MAIL_INBOX_UPDATE()
 	end
 
 	if not hasItem or cashOnly or COD > 0 then
