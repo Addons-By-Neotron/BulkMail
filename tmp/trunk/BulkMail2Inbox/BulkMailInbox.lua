@@ -14,22 +14,9 @@ local ibIndex, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- var
 --[[----------------------------------------------------------------------------
   Table Handling
 ------------------------------------------------------------------------------]]
-local new, del, newHash, newSet
+local newHash, del
 do
 	local list = setmetatable({}, {__mode='k'})
-	function new(...)
-		local t = next(list)
-		if t then
-			list[t] = nil
-			for i = 1, select('#', ...) do
-				t[i] = select(i, ...)
-			end
-			return t
-		else
-			return { ... }
-		end
-	end
-	
 	function newHash(...)
 		local t = next(list)
 		if t then
@@ -56,7 +43,7 @@ end
   Local Processing
 ------------------------------------------------------------------------------]]
 -- Build a table with info about all items and money in the Inbox
-inboxCache = new()
+inboxCache = {}
 local function inboxCacheBuild()
 	for k in ipairs(inboxCache) do inboxCache[k] = del(inboxCache[k]) end
 	inboxCash = 0
@@ -86,6 +73,7 @@ local function takeAll(cash, mark)
 	markOnly = mark
 	ibIndex = GetInboxNumItems()
 	takeAllInProgress = true
+	invFull = false
 	BulkMailInbox:MAIL_INBOX_UPDATE()
 end
 
@@ -107,8 +95,9 @@ function BulkMailInbox:OnInitialize()
 	})
 
 	sortFields = { 'itemLink', 'qty', 'money', 'returnable', 'sender', 'daysLeft' }
-	markTable = new()
+	markTable = {}
 	inboxCash = 0
+	invFull = false
 
 	self.opts = {
 		type = 'group',
@@ -190,20 +179,21 @@ function BulkMailInbox:MAIL_CLOSED()
 end
 BulkMailInbox.PLAYER_ENTERING_WORLD = BulkMailInbox.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
-function BulkMailInbox:UI_ERROR_MESSAGE(msg)  -- move Take All along if inventory is full to prevent infinite loop
+function BulkMailInbox:UI_ERROR_MESSAGE(msg)  -- prevent infinite loop when inventory is full
 	if msg == ERR_INV_FULL then
-		cashOnly = true  -- keep parsing for cash, but no more room for items
+		invFull = true
+		return self:MAIL_INBOX_UPDATE()
 	end
 end
 
 -- Take next inbox item or money; skip past COD items and letters.
 function BulkMailInbox:MAIL_INBOX_UPDATE()
 	if not takeAllInProgress then return self:ScheduleEvent('BMI_RefreshInboxGUI', self.RefreshInboxGUI, 1, self) end
-
+	self:Print(ibIndex)
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
 		inboxCacheBuild()
-		if cleanPass or numItems <= 0 then
+		if cleanPass or numItems <= 0 or invFull then
 			takeAllInProgress = false
 			self:RefreshInboxGUI()
 			return
@@ -222,17 +212,15 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 
 	if money > 0 then
 		cleanPass = false
-		return TakeInboxMoney(ibIndex)
+		TakeInboxMoney(ibIndex)
 	end
 
-	if not hasItem or cashOnly or COD > 0 then
-		ibIndex = ibIndex - 1
-		return self:MAIL_INBOX_UPDATE()
-	else
+	ibIndex = ibIndex - 1
+	if hasItem and not cashOnly and COD == 0 then
 		cleanPass = false
-		ibIndex = ibIndex - 1
-		return TakeInboxItem(ibIndex + 1)
+		if not invFull then return TakeInboxItem(ibIndex + 1) end
 	end
+	return self:MAIL_INBOX_UPDATE()
 end
 
 --[[----------------------------------------------------------------------------
