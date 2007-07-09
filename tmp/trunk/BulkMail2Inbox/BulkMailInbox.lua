@@ -189,7 +189,6 @@ end
 -- Take next inbox item or money; skip past COD items and letters.
 function BulkMailInbox:MAIL_INBOX_UPDATE()
 	if not takeAllInProgress then return self:ScheduleEvent('BMI_RefreshInboxGUI', self.RefreshInboxGUI, 1, self) end
-	self:Print(ibIndex)
 	local numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
 		inboxCacheBuild()
