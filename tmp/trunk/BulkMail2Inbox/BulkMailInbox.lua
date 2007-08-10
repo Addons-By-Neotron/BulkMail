@@ -9,7 +9,7 @@ local abacus = AceLibrary('Abacus-2.0')
 local _G = getfenv(0)
 
 local sortFields, inboxCache, markTable  -- tables
-local ibIndex, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress-- variables
+local ibIndex, inboxCash, cleanPass, cashOnly, markOnly, takeAllInProgress  -- variables
 
 --[[----------------------------------------------------------------------------
   Table Handling
@@ -74,6 +74,7 @@ local function takeAll(cash, mark)
 	ibIndex = GetInboxNumItems()
 	takeAllInProgress = true
 	invFull = false
+	lastMoneyIndex = 0
 	inboxCacheBuild()
 	BulkMailInbox:MAIL_INBOX_UPDATE()
 end
@@ -188,9 +189,11 @@ function BulkMailInbox:UI_ERROR_MESSAGE(msg)  -- prevent infinite loop when inve
 end
 
 -- Take next inbox item or money; skip past COD items and letters.
+local subject, money, COD, daysLeft, hasItem
+local numItems
 function BulkMailInbox:MAIL_INBOX_UPDATE()
 	if not takeAllInProgress then return self:ScheduleEvent('BMI_RefreshInboxGUI', self.RefreshInboxGUI, 1, self) end
-	local numItems = GetInboxNumItems()
+	numItems = GetInboxNumItems()
 	if ibIndex <= 0 then
 		if cleanPass or numItems <= 0 or invFull then
 			takeAllInProgress = false
@@ -198,22 +201,26 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 		else
 			ibIndex = numItems
 			cleanPass = true
-			return takeAll(cashOnly, markOnly)
+			return self:ScheduleEvent('BMI_takeAll', takeAll, .1, cashOnly, markOnly)
 		end
 	end
 	
-	local subject, money, COD, daysLeft, hasItem = select(4, GetInboxHeaderInfo(ibIndex))
+	subject, money, COD, daysLeft, hasItem = select(4, GetInboxHeaderInfo(ibIndex))
+	ibIndex = ibIndex - 1
 	if markOnly and not markTable[daysLeft..subject] then
-		ibIndex = ibIndex - 1
 		return self:MAIL_INBOX_UPDATE()
 	end
 
 	if money > 0 then
 		cleanPass = false
-		TakeInboxMoney(ibIndex)
+		if GetInboxInvoiceInfo(ibIndex + 1) then
+			TakeInboxMoney(ibIndex + 1)
+		else
+			TakeInboxMoney(ibIndex + 1)
+			return self:MAIL_INBOX_UPDATE()
+		end
 	end
 
-	ibIndex = ibIndex - 1
 	if hasItem and not cashOnly and COD == 0 then
 		cleanPass = false
 		if not invFull then return TakeInboxItem(ibIndex + 1) end
