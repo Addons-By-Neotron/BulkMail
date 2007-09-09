@@ -232,7 +232,7 @@ local function sendCacheAdd(bag, slot, squelch)
 	BulkMail.sendCache = sendCache
 	if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
 		gratuity:SetBagItem(bag, slot)
-		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
+		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true) then
 			sendCache[bag] = sendCache[bag] or new()
 			sendCache[bag][slot] = true; numItems = numItems + 1
 			shadeBagSlot(bag,slot,true)
@@ -859,7 +859,7 @@ local function updateDynamicARDTables()
 		if itemID and not dupeCheck[itemID] then
 			dupeCheck[itemID] = true
 			gratuity:SetBagItem(bag, slot)
-			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) then
+			if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true) then
 				table.insert(bagItemsDDTable.subMenu, newHash(
 					'text', select(2, GetItemInfo(itemID)),
 					'checked', true, 'checkIcon', select(10, GetItemInfo(itemID)),
