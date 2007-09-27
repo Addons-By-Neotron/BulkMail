@@ -593,13 +593,13 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
-local suffix = "\255"  -- for ensuring subject uniqueness to help BMI's "Selected" features
+local suffix = "\32"  -- for ensuring subject uniqueness to help BMI's "selected item" features
 function BulkMail:Send(cod)
 	if StaticPopup_Visible('SEND_MONEY') then return end
 	if GetSendMailItem() then
 		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
-			if #suffix > 10 then suffix = "\255" else suffix = suffix.."\255" end
+			if #suffix > 10 then suffix = "\32" else suffix = suffix.."\32" end
 			_G.this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
