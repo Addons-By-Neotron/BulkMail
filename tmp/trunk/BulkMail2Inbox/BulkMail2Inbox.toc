@@ -1,4 +1,4 @@
-## Interface: 20100
+## Interface: 20200
 ## Title: BulkMail Inbox |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail reception made really easy
 ## Version: 2.0
