@@ -1,3 +1,10 @@
+2.2
+- Inbox features separated out to BulkMail2Inbox
+- C.O.D. sending added.  Value applies to all mails in this send action
+- Automatic subject-filling added.
+- FuBar plugin added for option handling.  Click brings up the AutoSend Rules  interface
+- Added ctrl-click on player name links to fill the To: field.  Contributed by  bigzero
+
 2.1
 - Added several inbox functions (options under /bm inbox).
 - Inbox icon clicks: Shift-click to take item, Ctrl-click to return item, Alt-click (disabled by default) to delete mail.

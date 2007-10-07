@@ -1,7 +1,7 @@
-## Interface: 20100
+## Interface: 20200
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made really easy
-## Version: 2.1
+## Version: 2.2
 ## Author: hyperactiveChipmunk
 ## X-Credits: Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
 ## X-Category: Mail
