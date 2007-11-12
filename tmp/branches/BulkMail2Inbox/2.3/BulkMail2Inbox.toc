@@ -9,7 +9,7 @@
 ## SavedVariables: BulkMail2InboxDB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, AbacusLib, FuBar, FuBarPlugin-2.0, BulkMail2, Ace3
 ## X-Embeds: Ace2, TabletLib, DewdropLib, AbacusLib, FuBarPlugin-2.0
-## LoadManagers: SupplyAndDemand, ForkliftGnome
+## LoadManagers: SupplyAndDemand, ForkliftGnome, AddonLoader
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
 ## X-LoadOn-Slash: /bulkmailinbox, /bmi
@@ -28,6 +28,7 @@ lib\Abacus-2.0\Abacus-2.0.lua
 lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 
 BulkMailInbox-enUS.lua
+BulkMailInbox-deDE.lua
 BulkMailInbox.lua
 BulkMailFu.lua
 zomgmail.lua
