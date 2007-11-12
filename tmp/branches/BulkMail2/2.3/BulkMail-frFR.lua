@@ -6,6 +6,8 @@ L:RegisterTranslations("frFR", function() return {
 	["Add rule"] = "Ajouter une règle",
 	["add"] = "Ajouter",
 	["as"] = "comme",
+--	["Attach multiple items"] = true,
+--	["Attach as many items as possible per mail."] = true,
 	["AutoSend Options"] = "Options d'auto-envoi",
 	["AutoSend Rules"] = "Règles d'auto-envoi",
 	["AutoSend"] = "Auto-envoi",
