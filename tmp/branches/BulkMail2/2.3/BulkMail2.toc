@@ -10,7 +10,7 @@
 ## SavedVariables: BulkMail2DB
 ## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, AbacusLib, FuBar, FuBarPlugin-2.0, PeriodicTable-3.0
 ## X-Embeds: Ace2, TabletLib, DewdropLib, GratuityLib, AbacusLib, FuBarPlugin-2.0, PeriodicTable-3.0
-## LoadManagers: SupplyAndDemand, ForkliftGnome
+## LoadManagers: SupplyAndDemand, ForkliftGnome, AddonLoader
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
 ## X-LoadOn-Slash: /bulkmail, /bm
@@ -38,6 +38,7 @@ lib\PeriodicTable-3.0-Tradeskill\PeriodicTable-3.0-Tradeskill.lua
 lib\PeriodicTable-3.0-TradeskillResultMats\PeriodicTable-3.0-TradeskillResultMats.lua
 
 BulkMail-enUS.lua
+BulkMail-deDE.lua
 BulkMail-frFR.lua
 BulkMail.lua
 BulkMailFu.lua
