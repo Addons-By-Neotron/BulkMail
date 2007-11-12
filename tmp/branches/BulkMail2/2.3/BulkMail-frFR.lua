@@ -18,6 +18,7 @@ L:RegisterTranslations("frFR", function() return {
 	["Cancel"] = "Annuler",
 	["Cannot determine the item clicked."] = "Impossible de déterminer l'objet cliqué",
 	["Clear all rules for this realm."] = "Effacer toutes les règles de ce royaume",
+	["clear"] = "vider",
 	["Clear"] = "Vider",
 	--["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."] = true,
 	["Close"] = "Fermer",
