@@ -31,4 +31,3 @@ BulkMailInbox-enUS.lua
 BulkMailInbox-deDE.lua
 BulkMailInbox.lua
 BulkMailFu.lua
-zomgmail.lua
