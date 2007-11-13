@@ -1,0 +1,34 @@
+## Interface: 20300
+## Title: BulkMail Inbox |cff7fff7f -Ace2-|r
+## Notes: Bulk mail reception made really easy
+## Version: 2.3
+## Author: hyperactiveChipmunk
+## X-Category: Mail
+## X-eMail: hyperactiveChipmunk@gmail.com
+## X-Website: http://wowace.com/wiki/BulkMail2Inbox
+## SavedVariables: BulkMail2InboxDB
+## OptionalDeps: Ace2, TabletLib, DewdropLib, AbacusLib, FuBar, FuBarPlugin-2.0, BulkMail2, Ace3
+## X-Embeds: Ace2, TabletLib, DewdropLib, AbacusLib, FuBarPlugin-2.0
+## LoadManagers: SupplyAndDemand, ForkliftGnome, AddonLoader
+## X-S&D-AtMail: true
+## X-LoadOn-Mailbox: true
+## X-LoadOn-Slash: /bulkmailinbox, /bmi
+
+lib\Ace2\AceLibrary\AceLibrary.lua
+lib\Ace2\AceOO-2.0\AceOO-2.0.lua
+lib\Ace2\AceEvent-2.0\AceEvent-2.0.lua
+lib\Ace2\AceAddon-2.0\AceAddon-2.0.lua
+lib\Ace2\AceHook-2.1\AceHook-2.1.lua
+lib\Ace2\AceDB-2.0\AceDB-2.0.lua
+lib\Ace2\AceConsole-2.0\AceConsole-2.0.lua
+lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua
+
+lib\Tablet-2.0\Tablet-2.0.lua
+lib\Abacus-2.0\Abacus-2.0.lua
+lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
+
+BulkMailInbox-enUS.lua
+BulkMailInbox-deDE.lua
+BulkMailInbox.lua
+BulkMailFu.lua
+zomgmail.lua
