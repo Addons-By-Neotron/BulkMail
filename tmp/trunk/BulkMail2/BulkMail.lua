@@ -10,10 +10,13 @@ local abacus   = AceLibrary('Abacus-2.0')
 local pt       = AceLibrary('PeriodicTable-3.0')
 local dewdrop  = AceLibrary('Dewdrop-2.0')
 
-local _G = getfenv(0)
+local SUFFIX_CHAR = "\32"
 
-local auctionItemClasses, sendCache, destCache, reverseDestCache, rulesCache, autoSendRules, globalExclude
+local _G = _G
+
+local auctionItemClasses, sendCache, destCache, reverseDestCache, destSendCache, rulesCache, autoSendRules, globalExclude -- tables
 local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- variables
+
 
 --[[----------------------------------------------------------------------------
   Table Handling
@@ -309,6 +312,26 @@ local function sendCacheBuild(dest)
 	BulkMail:RefreshSendQueueGUI()
 end
 
+destSendCache = new()
+-- Organize the send queue by recipient in order to reduce fragmentation of multi-item mails
+local function organizeSendCache()
+	destSendCache = deepDel(destSendCache)
+	local dest
+	for bag, slots in pairs(sendCache) do
+		for slot in pairs(slots) do
+			dest = sendDest ~= '' and sendDest or rulesCacheDest(GetContainerItemLink(bag, slot)) or self.db.char.defaultDestination
+			if dest then
+				destSendCache = destSendCache or new()
+				destSendCache[dest] = destSendCache[dest] or new()
+				table.insert(destSendCache[dest], new(bag, slot))
+			else
+				self:Print(L["No default destination set."])
+				self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
+			end
+		end
+	end
+end
+
 --[[----------------------------------------------------------------------------
   Setup
 ------------------------------------------------------------------------------]]
@@ -340,6 +363,7 @@ function BulkMail:OnInitialize()
 
 	self:RegisterDefaults('char', {
 		isSink = false,
+		attachMulti = true,
 		globalExclude = {
 			['*'] = {}
 		},
@@ -397,6 +421,12 @@ function BulkMail:OnInitialize()
 				desc = L["Disable AutoSend queue auto-filling for this character."],
 				get = function() return self.db.char.isSink end,
 				set = function(v) self.db.char.isSink = v end,
+			},
+			attachmulti = {
+				name = L["Attach multiple items"], type = 'toggle',
+				desc = L["Attach as many items as possible per mail."],
+				get = function() return self.db.char.attachMulti end,
+				set = function(v) self.db.char.attachMulti = v end,
 			},
 		},
 	}
@@ -458,6 +488,7 @@ function BulkMail:MAIL_CLOSED()
 	self:UnhookAll()
 	sendCacheCleanup()
 	self:HideSendQueueGUI()
+	self:CancelScheduledEvent('BM_SendLoop')
 end
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
@@ -505,7 +536,7 @@ function BulkMail:SetItemRef(link, ...)
 			end 
 		end 
 	end 
-	self.hooks['SetItemRef'](link,...) 
+	self.hooks.SetItemRef(link,...) 
 end 
 
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
@@ -513,10 +544,19 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
 	sendDest = SendMailNameEditBox:GetText()
 	local cod = SendMailCODButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney)
 	if GetSendMailItem() or sendCache and next(sendCache) then
+		organizeSendCache()
 		self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self, cod)
 	else
-		if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' then
+		if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' and (not sendCache or not next(sendCache)) then
 			SendMailSubjectEditBox:SetText(abacus:FormatMoneyFull(MoneyInputFrame_GetCopper(SendMailMoney)))
+			if SendMailNameEditBox:GetText() == '' then
+				if self.db.char.defaultDestination then
+					SendMailNameEditBox:SetText(self.db.char.defaultDestination)
+				else
+					self:Print(L["No default destination set."])
+					self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
+				end
+			end
 		end
 		_G.this = SendMailMailButton
 		return self.hooks[frame].OnClick(frame, a1)
@@ -593,13 +633,13 @@ end
 -- Sends the current item in the SendMailItemButton to the currently-specified
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
-local suffix = "\32"  -- for ensuring subject uniqueness to help BMI's "selected item" features
+local suffix = SUFFIX_CHAR  -- for ensuring subject uniqueness to help BMI's "selected item" features
 function BulkMail:Send(cod)
 	if StaticPopup_Visible('SEND_MONEY') then return end
-	if GetSendMailItem() then
-		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
+	if GetSendMailItem(1) then
+		SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination or '')
 		if SendMailNameEditBox:GetText() ~= '' then
-			if #suffix > 10 then suffix = "\32" else suffix = suffix.."\32" end
+			if #suffix > 10 then suffix = SUFFIX_CHAR else suffix = suffix..SUFFIX_CHAR end
 			_G.this = SendMailMailButton
 			return self.hooks[SendMailMailButton].OnClick()
 		elseif not self.db.char.defaultDestination then
@@ -610,21 +650,21 @@ function BulkMail:Send(cod)
 		end
 		return
 	end
-	if sendCache and next(sendCache) then
-		local bag, slot = next(sendCache)
-		slot = next(slot)
-		PickupContainerItem(bag, slot)
-		ClickSendMailItemButton()
-		local itemLink = GetContainerItemLink(bag, slot)
-		if itemLink then
-			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
+	if destSendCache and next(destSendCache) then
+		local dest, bagslots = next(destSendCache)
+		local bag, slot
+		for i=1, math.min(self.db.char.attachMulti and ATTACHMENTS_MAX_SEND or 1, #bagslots) do
+			bag, slot = unpack(table.remove(bagslots))
+			PickupContainerItem(bag, slot)
+			ClickSendMailItemButton(i)
 		end
+		destSendCache[dest] = next(bagslots) and bagslots or del(bagslots)
+
 		SendMailSubjectEditBox:SetText(SendMailSubjectEditBox:GetText()..suffix)
 		if cod then
 			SendMailSendMoneyButton:SetChecked(nil)
 			MoneyInputFrame_SetCopper(SendMailMoney, cod)
 		end
-		return sendCacheRemove(bag, slot)
 	else
 		self:CancelScheduledEvent('BM_SendLoop')
 		SendMailNameEditBox:SetText('')
@@ -639,16 +679,12 @@ end
 function BulkMail:QuickSend(bag, slot)
 	bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
 	if bag and slot then
-		local itemLink = GetContainerItemLink(bag, slot)
 		PickupContainerItem(bag, slot)
 		ClickSendMailItemButton()
-		if itemLink then
-			SendMailPackageButton:SetID(tonumber(string.match(itemLink, "item:(%d+):")) or 0)
-		end
-		if GetSendMailItem() then
+		if GetSendMailItem(1) then
 			local dest = SendMailNameEditBox:GetText()
 			if dest == '' then
-				SendMailNameEditBox:SetText(rulesCacheDest(SendMailPackageButton:GetID()) or self.db.char.defaultDestination or '')
+				SendMailNameEditBox:SetText(rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination or '')
 			end
 			if SendMailNameEditBox:GetText() ~= '' then
 				_G.this = SendMailMailButton
