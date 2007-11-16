@@ -446,8 +446,6 @@ function BulkMail:OnInitialize()
 end
 
 function BulkMail:OnEnable()
-	self:RegisterAutoSendEditTablet()
-	self:RegisterAddRuleDewdrop()
 	self:RegisterEvent('MAIL_SHOW')
 	self:RegisterEvent('MAIL_CLOSED')
 	self:RegisterEvent('PLAYER_ENTERING_WORLD')
@@ -457,6 +455,8 @@ function BulkMail:OnEnable()
 		self:MAIL_SHOW()
 	end
 	self:RegisterSendQueueGUI()
+	self:RegisterAutoSendEditTablet()
+	self:RegisterAddRuleDewdrop()
 end
 
 function BulkMail:OnDisable()
@@ -834,9 +834,9 @@ local function addRule(ruletype, value)
 	rulesAltered = true
 end
 
-local function createStaticARDTables()
-	if itemInputDDTable and itemTypesDDTable and pt3SetsDDTable then return end
+local function createItemInputDDTable(force)
 	-- User-specified item IDs
+	if itemInputDDTable and not force then return end
 	itemInputDDTable = newHash('text', L["Item ID"], 'hasArrow', true, 'hasEditBox', true,
 		'tooltipTitle', L["ItemID(s)"], 'tooltipText', L["Usage: <itemID> [itemID2, ...]"],
 		'editBoxFunc', function(...)
@@ -848,8 +848,11 @@ local function createStaticARDTables()
 			end
 		end
 	)
+end
 
+local function createBlizzardCategoryDDTable(force)
 	-- Blizzard item types
+	if itemTypesDDTable and not force then return end
 	itemTypesDDTable = newHash('text', L["Item Type"], 'hasArrow', true, 'subMenu', new())
 	for itype, subtypes in pairs(auctionItemClasses) do
 		itemTypesDDTable.subMenu[itype] = newHash('text', itype, 'hasArrow', #subtypes > 0, 'func', addRule, 'arg1', "itemTypes", 'arg2', newHash('type', itype, 'subtype', #subtypes == 0 and itype))
@@ -861,8 +864,11 @@ local function createStaticARDTables()
 			end
 		end
 	end
+end
 
+local function createPT3SetsDDTable(force)
 	-- PeriodicTable-3.0 sets
+	if pt3SetsDDTable and not force then return end
 	pt3SetsDDTable = newHash('text', L["Periodic Table Set"], 'hasArrow', true, 'subMenu', new())
 	local sets = pt:getUpgradeData()
 	local pathtable = new()
@@ -881,12 +887,18 @@ local function createStaticARDTables()
 	end
 end
 
-bagItemsDDTable = newHash(
-	'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
-	'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
-)
+local function createStaticARDTables()
+	createItemInputDDTable()
+	createBlizzardCategoryDDTable()
+	createPT3SetsDDTable()
+end
+
 local dupeCheck = new()
 local function updateDynamicARDTables()
+	bagItemsDDTable = bagItemsDDTable or newHash(
+		'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
+		'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
+	)
 	for k in pairs(dupeCheck) do dupeCheck[k] = nil end
 	for k in ipairs(bagItemsDDTable.subMenu) do bagItemsDDTable.subMenu[k] = nil end
 	-- Mailable items in bags
@@ -908,13 +920,11 @@ end
 
 function BulkMail:RegisterAddRuleDewdrop()
 	-- Create table for Dewdrop and register
-	createStaticARDTables()
-	updateDynamicARDTables()
 	dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
 end
 
 local function headerClickFunc(dest)
-	if IsAltKeyDown() then
+	if IsAltKeyDown() and not dest == "globalExclude" then
 		confirmedDestToRemove = dest
 		StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
 	else
@@ -923,21 +933,11 @@ local function headerClickFunc(dest)
 	tablet:Refresh('BM_AutoSendEditTablet')
 end
 
-local function includeFunc(arg)
-	curRuleSet = arg
+local function showRulesetDD(ruleset)
+	curRuleSet = ruleset
 	updateDynamicARDTables()
+	createStaticARDTables()
 	dewdrop:Open('BM_AddRuleDD')
-end
-
-local function excludeFunc(arg)
-	curRuleSet = arg
-	updateDynamicARDTables()
-	dewdrop:Open('BM_AddRuleDD')
-end
-
-local function globalExcludeFunc()
-	shown.globalExclude = not shown.globalExclude
-	tablet:Refresh('BM_AutoSendEditTablet')
 end
 
 local function newDest()
@@ -959,6 +959,7 @@ local function listRules(category, ruleset)
 			args.text, args.textR, args.textG, args.textB = tostring(rule), 1, 1, 1
 			args.indentation = 20
 			args.hasCheck = false
+			args.checked = false
 			args.func = function(ruleset, id)
 				if IsAltKeyDown() then
 					table.remove(rules, k)
@@ -1007,10 +1008,10 @@ local function fillAutoSendEditTablet()
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
 			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules
-				cat:AddLine('text', L["Include"], 'indentation', 10, 'func', includeFunc, 'arg1', rulesets.include)
+				cat:AddLine('text', L["Include"], 'indentation', 10, 'func', showRulesetDD, 'arg1', rulesets.include)
 				listRules(cat, rulesets.include)
 				-- "exclude" rules for this destination; clicking brings up menu to add new exclude rules
-				cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', excludeFunc, 'arg1', rulesets.exclude)
+				cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', showRulesetDD, 'arg1', rulesets.exclude)
 				listRules(cat, rulesets.exclude)
 				cat:AddLine()
 				cat:AddLine()
@@ -1021,11 +1022,11 @@ local function fillAutoSendEditTablet()
 	-- Global Exclude Rules
 	cat = tablet:AddCategory(
 		'id', "globalExclude", 'text', L["Global Exclude"], 'showWithoutChildren', true, 'hideBlankLine', true,
-		'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown[dest] and "Minus" or "Plus"),
-		'func', globalExcludeFunc
+		'checked', true, 'hasCheck', true, 'checkIcon', string.format("Interface\\Buttons\\UI-%sButton-Up", shown.globalExclude and "Minus" or "Plus"),
+		'func', headerClickFunc, 'arg1', "globalExclude"
 	)
 	if shown.globalExclude then
-		cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', function() curRuleSet = globalExclude dewdrop:Open('BM_AddRuleDD') end)
+		cat:AddLine('text', L["Exclude"], 'indentation', 10, 'func', showRulesetDD, 'arg1', globalExclude)
 		listRules(cat, globalExclude)
 	end
 
