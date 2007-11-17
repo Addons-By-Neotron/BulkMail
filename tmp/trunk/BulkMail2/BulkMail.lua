@@ -891,13 +891,13 @@ local function createPT3SetsDDTable(force)
 end
 
 local dupeCheck = {}
-local function updateDynamicARDTables()
-	bagItemsDDTable = bagItemsDDTable or newHash(
+function updateDynamicARDTables()
+	deepDel(bagItemsDDTable)
+	bagItemsDDTable = newHash(
 		'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
 		'tooltipTitle', L["Bag Items"], 'tooltipText', L["Mailable items in your bags."]
 	)
 	for k in pairs(dupeCheck) do dupeCheck[k] = nil end
-	for k in ipairs(bagItemsDDTable.subMenu) do bagItemsDDTable.subMenu[k] = nil end
 	-- Mailable items in bags
 	for bag, slot, item in bagIter() do
 		local itemID = tonumber(string.match(item or '', "item:(%d+)"))
