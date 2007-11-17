@@ -838,6 +838,7 @@ local function createItemInputDDTable(force)
 	-- User-specified item IDs
 	if force then itemInputDDTable = deepDel(itemInputDDTable) end
 	if itemInputDDTable then return end
+
 	itemInputDDTable = newHash('text', L["Item ID"], 'hasArrow', true, 'hasEditBox', true,
 		'tooltipTitle', L["ItemID(s)"], 'tooltipText', L["Usage: <itemID> [itemID2, ...]"],
 		'editBoxFunc', function(...)
@@ -855,6 +856,7 @@ local function createBlizzardCategoryDDTable(force)
 	-- Blizzard item types
 	if force then itemTypesDDTable = deepDel(itemTypesDDTable) end
 	if itemTypesDDTable then return end
+
 	itemTypesDDTable = newHash('text', L["Item Type"], 'hasArrow', true, 'subMenu', new())
 	for itype, subtypes in pairs(auctionItemClasses) do
 		itemTypesDDTable.subMenu[itype] = newHash('text', itype, 'hasArrow', #subtypes > 0, 'func', addRule, 'arg1', "itemTypes", 'arg2', newHash('type', itype, 'subtype', #subtypes == 0 and itype))
@@ -872,6 +874,7 @@ local function createPT3SetsDDTable(force)
 	-- PeriodicTable-3.0 sets
 	if force then pt3SetsDDTable = deepDel(pt3SetsDDTable) end
 	if pt3SetsDDTable then return end
+
 	pt3SetsDDTable = newHash('text', L["Periodic Table Set"], 'hasArrow', true, 'subMenu', new())
 	local sets = pt:getUpgradeData()
 	local pathtable = new()
@@ -891,7 +894,7 @@ local function createPT3SetsDDTable(force)
 end
 
 local dupeCheck = {}
-function updateDynamicARDTables()
+local function updateDynamicARDTables()
 	deepDel(bagItemsDDTable)
 	bagItemsDDTable = newHash(
 		'text', L["Items from Bags"], 'hasArrow', true, 'subMenu', new(), 
