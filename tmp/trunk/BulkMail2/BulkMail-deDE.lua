@@ -2,7 +2,7 @@
 local L = AceLibrary("AceLocale-2.2"):new("BulkMail")
 L:RegisterTranslations("deDE", function() return {
 	["Accept"] = "Akzeptieren",
-	["Add an item rule by itemlink or PeriodicTable-3.0 set manually."] = "F\195\188ge eine Itemregel nach Itemlink oder PeriodicTable-3.0 Set hinzu.",
+	["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."] = "F\195\188ge eine Itemregel nach Itemlink oder LibPeriodicTable-3.1 Set hinzu.",
 	["Add rule"] = "Regel hinzuf\195\188gen",
 	["add"] = "hinzuf\195\188gen",
 	["as"] = "als",

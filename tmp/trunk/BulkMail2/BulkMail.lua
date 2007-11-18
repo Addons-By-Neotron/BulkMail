@@ -7,7 +7,7 @@ BulkMail.L = L
 local tablet   = AceLibrary('Tablet-2.0')
 local gratuity = AceLibrary('Gratuity-2.0')
 local abacus   = AceLibrary('Abacus-2.0')
-local pt       = AceLibrary('PeriodicTable-3.0')
+local pt       = AceLibrary('LibPeriodicTable-3.1')
 local dewdrop  = AceLibrary('Dewdrop-2.0')
 
 local SUFFIX_CHAR = "\32"
@@ -16,7 +16,6 @@ local _G = _G
 
 local auctionItemClasses, sendCache, destCache, reverseDestCache, destSendCache, rulesCache, autoSendRules, globalExclude -- tables
 local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- variables
-
 
 --[[----------------------------------------------------------------------------
   Table Handling
@@ -107,7 +106,7 @@ end
 -- Unpacks the UI-friendly autoSendRules table into rulesCache, a simple
 -- item/rules lookup table, in the following manner:
 --   ItemIDs   - inserted as table keys
---   PT3Sets   - set is unpacked and each item is inserted as a table key
+--   PT31Sets   - set is unpacked and each item is inserted as a table key
 --   ItemTypes - ItemType is inserted as a table key pointing to a table of
 --               desired subtype keys
 -- Exclusions are processed after all include rules are handled, 
@@ -122,7 +121,7 @@ local function rulesCacheBuild()
 		rulesCache[dest] = new()
 		-- include rules
 		for _, itemID in ipairs(rules.include.items) do rulesCache[dest][tonumber(itemID)] = true end
-		for _, set in ipairs(rules.include.pt3Sets) do
+		for _, set in ipairs(rules.include.pt31Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][tonumber(itemID)] = true end
 		end
 		for _, itemTypeTable in ipairs(rules.include.itemTypes) do
@@ -139,10 +138,10 @@ local function rulesCacheBuild()
 		for _, itemID in ipairs(rules.exclude.items) do rulesCache[dest][tonumber(itemID)] = nil end
 		for _, itemID in ipairs(globalExclude.items) do rulesCache[dest][tonumber(itemID)] = nil end
 
-		for _, set in ipairs(rules.exclude.pt3Sets) do
+		for _, set in ipairs(rules.exclude.pt31Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
 		end
-		for _, set in ipairs(globalExclude.pt3Sets) do
+		for _, set in ipairs(globalExclude.pt31Sets) do
 			for itemID in pt:IterateSet(set) do rulesCache[dest][itemID] = nil end
 		end
 
@@ -173,7 +172,7 @@ local function rulesCacheDest(item)
 	local rdest
 	local itemID = type(item) == 'number' and item or tonumber(string.match(item, "item:(%d+)"))
 	for _, xID in ipairs(globalExclude.items) do if itemID == xID then return end end
-	for _, xset in ipairs(globalExclude.pt3Sets) do
+	for _, xset in ipairs(globalExclude.pt31Sets) do
 		if pt:ItemInSet(itemID, xset) == true then return end
 	end
 
@@ -184,7 +183,7 @@ local function rulesCacheDest(item)
 		if canddest then
 			local xrules = autoSendRules[canddest].exclude
 			for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
-			for _, xset in ipairs(xrules.pt3Sets) do
+			for _, xset in ipairs(xrules.pt31Sets) do
 				if pt:ItemInSet(itemID, xset) == true then canddest = nil end
 			end
 		end
@@ -399,7 +398,7 @@ function BulkMail:OnInitialize()
 					},
 					add = {
 						name = L["add"], type = 'text', aliases = L["+"],
-						desc = L["Add an item rule by itemlink or PeriodicTable-3.0 set manually."],
+						desc = L["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."],
 						input = true, set = 'AddAutoSendRule', usage = L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"], get = false,
 						validate = function(arg1) return self.db.char.defaultDestination or (not string.match(arg1, "^|[cC]") and not pt:IsSetMulti(arg1) ~= nil) end,
 						error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
@@ -432,10 +431,10 @@ function BulkMail:OnInitialize()
 	}
 	self:RegisterChatCommand({"/bulkmail", "/bm"}, self.opts)
 
-	-- LoD PT3 Sets; yanked from Baggins
-	local PT3Modules
+	-- LoD PT31 Sets; yanked from Baggins
+	local PT31Modules
 	for i = 1, GetNumAddOns() do
-		local metadata = GetAddOnMetadata(i, "X-PeriodicTable-3.0-Module")
+		local metadata = GetAddOnMetadata(i, "X-PeriodicTable-3.1-Module")
 		if metadata then
 			local name, _, _, enabled = GetAddOnInfo(i)
 			if enabled then
@@ -604,7 +603,7 @@ function BulkMail:RemoveDestination(dest)
 end
 
 -- Simple function for adding include rules manually via itemlink or
--- PeriodicTable-3.0 set name.  If the first arg is neither of these, then
+-- LibPeriodicTable-3.1 set name.  If the first arg is neither of these, then
 -- it must be the destination; otherwise, defaultDestination is used.
 -- This is the function called by /bm autosend add.
 function BulkMail:AddAutoSendRule(...)
@@ -621,8 +620,8 @@ function BulkMail:AddAutoSendRule(...)
 			table.insert(autoSendRules[dest].include.items, itemID)
 			tablet:Refresh('BM_AutoSendEditTablet')
 			self:Print("%s - %s", select(i, ...), dest)
-		elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT3 set
-			table.insert(autoSendRules[dest].include.pt3Sets, select(i, ...))
+		elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT31 set
+			table.insert(autoSendRules[dest].include.pt31Sets, select(i, ...))
 			tablet:Refresh('BM_AutoSendEditTablet')
 			self:Print("%s - %s", select(i, ...), dest)
 		end
@@ -767,7 +766,7 @@ function BulkMail:RegisterSendQueueGUI()
 								texture, qty = GetContainerItemInfo(bag, slot)
 								if qty and qty > 1 then
 									itemText = string.format("%s(%d)", itemText, qty)
-								end						
+								end
 								cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
 									'checked', true, 'hasCheck', true, 'checkIcon', texture,
 									'func', onSendQueueItemSelect, 'arg1', bag, 'arg2', slot
@@ -826,10 +825,19 @@ end
 ------------------------------------------------------------------------------]]
 local shown = {}  -- keeps track of collapsed/expanded state in tablet
 local curRuleSet -- for adding rules via the dewdrop
-local itemInputDDTable, itemTypesDDTable, pt3SetsDDTable, bagItemsDDTable  -- dewdrop tables
+local itemInputDDTable, itemTypesDDTable, pt31SetsDDTable, bagItemsDDTable  -- dewdrop tables
 
 local function addRule(ruletype, value)
-	table.insert(curRuleSet[ruletype], value)
+	local removed = nil
+	for i, v in ipairs(curRuleSet[ruletype]) do
+		if v == value then
+			table.remove(curRuleSet[ruletype], i)
+			removed = true
+		end
+	end
+	if not removed then
+		table.insert(curRuleSet[ruletype], value)
+	end
 	tablet:Refresh('BM_AutoSendEditTablet')
 	rulesAltered = true
 end
@@ -870,22 +878,21 @@ local function createBlizzardCategoryDDTable(force)
 	end
 end
 
-local function createPT3SetsDDTable(force)
-	-- PeriodicTable-3.0 sets
-	if force then pt3SetsDDTable = deepDel(pt3SetsDDTable) end
-	if pt3SetsDDTable then return end
+local function createPT31SetsDDTable(force)
+	-- LibPeriodicTable-3.1 sets
+	if force then pt31SetsDDTable = deepDel(pt31SetsDDTable) end
+	if pt31SetsDDTable then return end
 
-	pt3SetsDDTable = newHash('text', L["Periodic Table Set"], 'hasArrow', true, 'subMenu', new())
-	local sets = pt:getUpgradeData()
+	pt31SetsDDTable = newHash('text', L["Periodic Table Set"], 'hasArrow', true, 'subMenu', new())
 	local pathtable = new()
 	local curmenu, prevmenu
-	for setname in pairs(sets) do
+	for setname in pairs(pt.sets) do
 		for k in ipairs(pathtable) do pathtable[k] = nil end
-		curmenu = pt3SetsDDTable.subMenu
+		curmenu = pt31SetsDDTable.subMenu
 		for cat in setname:gmatch("([^%.]+)") do
 			table.insert(pathtable, cat)
 			if not curmenu[cat] then
-				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', "pt3Sets", 'arg2', table.concat(pathtable, '.'))
+				curmenu[cat] = newHash('text', cat, 'hasArrow', true, 'subMenu', new(), 'func', addRule, 'arg1', "pt31Sets", 'arg2', table.concat(pathtable, '.'))
 			end
 			prevmenu, curmenu = curmenu[cat], curmenu[cat].subMenu
 		end
@@ -920,7 +927,7 @@ end
 
 function BulkMail:RegisterAddRuleDewdrop()
 	-- Create table for Dewdrop and register
-	dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt3SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
+	dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt31SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
 end
 
 local function headerClickFunc(dest)
@@ -938,7 +945,7 @@ local function showRulesetDD(ruleset)
 	updateDynamicARDTables()
 	createItemInputDDTable()
 	createBlizzardCategoryDDTable()
-	createPT3SetsDDTable()
+	createPT31SetsDDTable()
 	dewdrop:Open('BM_AddRuleDD')
 end
 
@@ -982,8 +989,8 @@ local function listRules(category, ruleset)
 					args.text = string.format("Item Type: %s", rule.type)
 				end
 				args.textR, args.textG, args.textB = 250/255, 223/255, 168/255
-			elseif ruletype == 'pt3Sets' then
-				args.text = string.format("PT3 Set: %s", rule)
+			elseif ruletype == 'pt31Sets' then
+				args.text = string.format("PT31 Set: %s", rule)
 				args.textR, args.textG, args.textB = 200/255, 200/255, 255/255
 			end
 			for arg, val in pairs(args) do
