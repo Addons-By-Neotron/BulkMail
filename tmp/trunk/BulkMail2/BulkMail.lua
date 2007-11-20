@@ -111,7 +111,7 @@ end
 --               desired subtype keys
 -- Exclusions are processed after all include rules are handled, 
 -- and will nil out the appropriate keys in the table.
-rulesCache = new()
+rulesCache = {}
 local function rulesCacheBuild()
 	if next(rulesCache) and not rulesAltered then return end
 	for k in pairs(rulesCache) do
@@ -206,7 +206,7 @@ local function updateSendCost()
 	end
 end
 
---returns the frame associated with bag, slot
+-- Returns the frame associated with bag, slot
 local function getBagSlotFrame(bag,slot)
 	if bag >= 0 and bag < NUM_CONTAINER_FRAMES and slot > 0 and slot <= MAX_CONTAINER_ITEMS then
 		local bagslots = GetContainerNumSlots(bag)
@@ -216,7 +216,7 @@ local function getBagSlotFrame(bag,slot)
 	end
 end
 
---shades or unshades the given bag slot
+-- Shades or unshades the given bag slot
 local function shadeBagSlot(bag,slot,shade)
 	local frame = getBagSlotFrame(bag,slot)
 	if frame then
@@ -225,13 +225,12 @@ local function shadeBagSlot(bag,slot,shade)
 end
 
 -- Add a container slot to BulkMail's send queue.
+sendCache = {}
 local function sendCacheAdd(bag, slot, squelch)
 	-- convert to (bag, slot, squelch) if called as (frame, squelch)
 	if type(slot) ~= 'number' then
 		bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
 	end
-	sendCache = sendCache or new()
-	BulkMail.sendCache = sendCache
 	if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
 		gratuity:SetBagItem(bag, slot)
 		if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true) then
@@ -311,8 +310,8 @@ local function sendCacheBuild(dest)
 	BulkMail:RefreshSendQueueGUI()
 end
 
-destSendCache = new()
 -- Organize the send queue by recipient in order to reduce fragmentation of multi-item mails
+destSendCache = {}
 local function organizeSendCache()
 	destSendCache = deepDel(destSendCache)
 	local dest
@@ -460,6 +459,7 @@ end
 
 function BulkMail:OnDisable()
 	self:UnregisterAllEvents()
+	self:UnhookAll()
 	if dewdrop:IsRegistered('BM_AddRuleDD') then dewdrop:Unregister('BM_AddRuleDD') end
 	if tablet:IsRegistered('BM_AutoSendEditTablet') then tablet:Unregister('BM_AutoSendEditTablet') end
 	if tablet:IsRegistered('BM_SendQueueTablet') then tablet:Unregister('BM_SendQueueTablet') end
@@ -704,6 +704,7 @@ end
 local function tabletClose(tabletID)
 	tablet:Close(tabletID)
 end
+
 local function uiClose(tabletID)
 	BulkMail:ScheduleEvent(tabletClose, 0, tabletID)
 end
@@ -801,12 +802,14 @@ function BulkMail:RegisterSendQueueGUI()
 		)
 	end
 end
+
 function BulkMail:ShowSendQueueGUI()
 	if not tablet:IsRegistered('BM_SendQueueTablet') then
 		self:RegisterSendQueueGUI()
 	end
 	tablet:Open('BM_SendQueueTablet')
 end
+
 function BulkMail:HideSendQueueGUI()
 	if tablet:IsRegistered('BM_SendQueueTablet') then
 		tablet:Close('BM_SendQueueTablet')
@@ -953,7 +956,7 @@ local function newDest()
 	StaticPopup_Show("BULKMAIL_ADD_DESTINATION")
 end
 
--- rules list prototype; used for listing both include- and exclude rules
+-- Rules list prototype; used for listing both include- and exclude rules
 local argTable = {}
 local args = {}
 local function listRules(category, ruleset)
@@ -1090,6 +1093,7 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	end,
 	timeout = 0, exclusive = 1, whileDead = 1, hideOnEscape = 1,
 }
+
 StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
 	text = L["BulkMail - Confirm removal of destination"],
 	button1 = L["Accept"], button2 = L["Cancel"],
