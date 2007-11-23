@@ -40,5 +40,6 @@ lib\LibPeriodicTable-3.1-TradeskillResultMats\LibPeriodicTable-3.1-TradeskillRes
 BulkMail-enUS.lua
 BulkMail-deDE.lua
 BulkMail-frFR.lua
+BulkMail-zhTW.lua
 BulkMail.lua
 BulkMailFu.lua
