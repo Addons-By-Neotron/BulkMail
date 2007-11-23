@@ -29,5 +29,6 @@ lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 
 BulkMailInbox-enUS.lua
 BulkMailInbox-deDE.lua
+BulkMailInbox-zhTW.lua
 BulkMailInbox.lua
 BulkMailFu.lua
