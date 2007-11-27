@@ -48,7 +48,7 @@ local function inboxCacheBuild()
 	for k in ipairs(inboxCache) do inboxCache[k] = del(inboxCache[k]) end
 	inboxCash, inboxItems = 0, 0
 	for i = 1, GetInboxNumItems() do
-		_, _, sender, subject, money, cod, daysLeft, numItems, _, wasReturned = GetInboxHeaderInfo(i)
+		local _, _, sender, subject, money, cod, daysLeft, numItems, _, wasReturned = GetInboxHeaderInfo(i)
 		if money > 0 then
 			table.insert(inboxCache, newHash(
 				'index', i, 'sender', sender, 'bmid', daysLeft..subject..0, 'returnable', not wasReturned, 'cod', cod,
@@ -204,6 +204,7 @@ function BulkMailInbox:UI_ERROR_MESSAGE(msg)  -- prevent infinite loop when inve
 end
 
 -- Take next inbox item or money; skip past CoD items and letters.
+local prevSubject = ''
 function BulkMailInbox:MAIL_INBOX_UPDATE()
 	if not takeAllInProgress then return self:ScheduleEvent('BMI_RefreshInboxGUI', self.RefreshInboxGUI, .5, self) end
 	local numMails = GetInboxNumItems()
@@ -223,6 +224,12 @@ function BulkMailInbox:MAIL_INBOX_UPDATE()
 	
 	local curIndex, curAttachIndex = ibIndex, ibAttachIndex
 	local subject, money, cod, daysLeft = select(4, GetInboxHeaderInfo(curIndex))
+
+	if subject then
+		prevSubject = subject
+	else
+		subject = prevSubject
+	end
 
 	if curAttachIndex == ATTACHMENTS_MAX_SEND then
 		ibIndex = ibIndex - 1
