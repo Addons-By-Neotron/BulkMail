@@ -474,7 +474,7 @@ function BulkMail:MAIL_SHOW()
 	self:SecureHook('SendMailFrame_CanSend')
 	self:SecureHook('ContainerFrame_Update')
 	self:SecureHook('MoneyInputFrame_OnTextChanged', SendMailFrame_CanSend)
-	self:Hook('SetItemRef', true)
+	self:SecureHook('SetItemRef')
 	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
 	self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
 	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
@@ -531,11 +531,10 @@ function BulkMail:SetItemRef(link, ...)
 		if strsub(link, 1, 6) == 'player' then 
 			local name = strsplit(":", strsub(link, 8))
 			if name and strlen(name) > 0 then 
-				return SendMailNameEditBox:SetText(name) 
+				SendMailNameEditBox:SetText(name)
 			end 
 		end 
 	end 
-	self.hooks.SetItemRef(link,...) 
 end 
 
 function BulkMail:SendMailMailButton_OnClick(frame, a1)
