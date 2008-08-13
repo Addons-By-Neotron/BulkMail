@@ -50,10 +50,16 @@ local function inboxCacheBuild()
 	for i = 1, GetInboxNumItems() do
 		local _, _, sender, subject, money, cod, daysLeft, numItems, _, wasReturned = GetInboxHeaderInfo(i)
 		if money > 0 then
+			-- Contributed by Scott Centoni
+			local _, itemName = GetInboxInvoiceInfo(i)
 			table.insert(inboxCache, newHash(
 				'index', i, 'sender', sender, 'bmid', daysLeft..subject..0, 'returnable', not wasReturned, 'cod', cod,
-				'daysLeft', daysLeft, 'itemLink', L["Cash"], 'money', money, 'texture', "Interface\\Icons\\INV_Misc_Coin_01"
+				'daysLeft', daysLeft, 'itemLink', itemName and ITEM_SOLD_COLON..' '..itemName or L["Cash"], 'money', money, 'texture', "Interface\\Icons\\INV_Misc_Coin_01"
 			))
+--			table.insert(inboxCache, newHash(
+--				'index', i, 'sender', sender, 'bmid', daysLeft..subject..0, 'returnable', not wasReturned, 'cod', cod,
+--				'daysLeft', daysLeft, 'itemLink', L["Cash"], 'money', money, 'texture', "Interface\\Icons\\INV_Misc_Coin_01"
+--			))
 			inboxCash = inboxCash + money
 		end
 		if numItems then
