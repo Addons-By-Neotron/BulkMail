@@ -639,7 +639,7 @@ function BulkMail:Send(cod)
 		if SendMailNameEditBox:GetText() ~= '' then
 			if #suffix > 10 then suffix = SUFFIX_CHAR else suffix = suffix..SUFFIX_CHAR end
 			_G.this = SendMailMailButton
-			return self.hooks[SendMailMailButton].OnClick()
+			return self.hooks[SendMailMailButton].OnClick(SendMailMailButton)
 		elseif not self.db.char.defaultDestination then
 			self:Print(L["No default destination set."])
 			self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
@@ -686,7 +686,7 @@ function BulkMail:QuickSend(bag, slot)
 			end
 			if SendMailNameEditBox:GetText() ~= '' then
 				_G.this = SendMailMailButton
-				return self.hooks[SendMailMailButton].OnClick()
+				return self.hooks[SendMailMailButton].OnClick(SendMailMailButton)
 			elseif not self.db.char.defaultDestination then
 				self:Print(L["No default destination set."])
 				self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
