@@ -1,6 +1,7 @@
-## Interface: 30000
+﻿## Interface: 30000
 ## Title: BulkMail |cff7fff7f -Ace2-|r
 ## Notes: Bulk mail sending made really easy
+## Notes-ruRU: BulkMail - отсылку почты делает на много легче
 ## Version: 3.0.0
 ## Author: hyperactiveChipmunk
 ## X-Credits: Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
@@ -18,6 +19,7 @@
 embeds.xml
 
 BulkMail-enUS.lua
+BulkMail-ruRU.lua
 BulkMail-deDE.lua
 BulkMail-frFR.lua
 BulkMail-zhTW.lua
