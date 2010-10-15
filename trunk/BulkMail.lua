@@ -494,13 +494,13 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 --[[----------------------------------------------------------------------------
   Hooks
 ------------------------------------------------------------------------------]]
-function BulkMail:ContainerFrameItemButton_OnModifiedClick(button, ignoreModifiers)
+function BulkMail:ContainerFrameItemButton_OnModifiedClick(frame, button)
 	if IsControlKeyDown() and IsShiftKeyDown() then
-		self:QuickSend(_G.this)
+		self:QuickSend(frame:GetParent():GetID(), frame:GetID())
 	elseif IsAltKeyDown() then
-		sendCacheToggle(_G.this)
+		sendCacheToggle(frame:GetParent():GetID(), frame:GetID())
 	elseif not IsShiftKeyDown() then
-		sendCacheRemove(_G.this)
+		sendCacheRemove(frame:GetParent():GetID(), frame:GetID())
 	end
 end
 
@@ -719,7 +719,9 @@ local function getLockedContainerItem()
 end
 
 local function onSendQueueItemSelect(bag, slot)
-	if bag and slot and arg1 == 'LeftButton' then
+	self:Print("onSendQueueItemSelect")
+--	if bag and slot and arg1 == 'LeftButton' then
+	if bag and slot then	--quick fix until arg1 can be passed in
 		if IsAltKeyDown() then
 			sendCacheToggle(bag, slot)
 		elseif IsShiftKeyDown() and ChatFrameEditBox:IsVisible() then
