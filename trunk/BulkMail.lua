@@ -1070,27 +1070,27 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	text = L["BulkMail - New AutoSend Destination"],
 	button1 = L["Accept"], button2 = L["Cancel"],
 	hasEditBox = 1, maxLetters = 20,
-	OnAccept = function()
-		BulkMail:AddDestination(_G[this:GetParent():GetName().."EditBox"]:GetText())
+	OnAccept = function(self)
+		BulkMail:AddDestination(_G[self:GetName().."EditBox"]:GetText())
 		tablet:Refresh('BM_AutoSendEditTablet')
 	end,
-	OnShow = function()
-		_G[this:GetName().."EditBox"]:SetFocus()
+	OnShow = function(self)
+		_G[self:GetName().."EditBox"]:SetFocus()
 	end,
-	OnHide = function()
-		if ChatFrameEditBox:IsVisible() then
-			ChatFrameEditBox:SetFocus()
-		end
-		_G[this:GetName().."EditBox"]:SetText('')
+	OnHide = function(self)
+		local activeWindow = ChatEdit_GetActiveWindow(); 
+		if ( activeWindow ) then
+			activeWindow:Insert(_G[self:GetName().."EditBox"]:SetText('')); 
+		end 
 	end,
-	EditBoxOnEnterPressed = function()
-		BulkMail:AddDestination(_G[this:GetParent():GetName().."EditBox"]:GetText())
+	EditBoxOnEnterPressed = function(self)
+		BulkMail:AddDestination(_G[self:GetName()]:GetText())
 		tablet:Refresh('BM_AutoSendEditTablet')
 		rulesAltered = true
-		_G.this:GetParent():Hide()
+		self:GetParent():Hide()
 	end,
-	EditBoxOnEscapePressed = function()
-		_G.this:GetParent():Hide()
+	EditBoxOnEscapePressed = function(self)
+		self:GetParent():Hide()
 	end,
 	timeout = 0, exclusive = 1, whileDead = 1, hideOnEscape = 1,
 }
@@ -1098,13 +1098,13 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
 	text = L["BulkMail - Confirm removal of destination"],
 	button1 = L["Accept"], button2 = L["Cancel"],
-	OnAccept = function()
+	OnAccept = function(self)
 		BulkMail:RemoveDestination(confirmedDestToRemove)
 		tablet:Refresh('BM_AutoSendEditTablet')
 		confirmedDestToRemove = nil
 		rulesAltered = true
 	end,
-	OnHide = function()
+	OnHide = function(self)
 		confirmedDestToRemove = nil
 	end,
 	timeout = 0, exclusive = 1, hideOnEscape = 1,
