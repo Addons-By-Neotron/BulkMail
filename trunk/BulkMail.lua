@@ -468,27 +468,35 @@ end
 --[[----------------------------------------------------------------------------
   Events
 ------------------------------------------------------------------------------]]
+local mailIsVisible
 function BulkMail:MAIL_SHOW()
-	if rulesAltered then rulesCacheBuild() end
-	self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
-	self:SecureHook('SendMailFrame_CanSend')
-	self:SecureHook('ContainerFrame_Update')
-	self:SecureHook('MoneyInputFrame_OnTextChanged', SendMailFrame_CanSend)
-	self:SecureHook('SetItemRef')
-	self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
-	self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
-	self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
-	self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
-
-	SendMailMailButton:Enable()
+        if not mailIsVisible then
+		mailIsVisible = true
+		if rulesAltered then rulesCacheBuild() end
+		self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
+		self:SecureHook('SendMailFrame_CanSend')
+		self:SecureHook('ContainerFrame_Update')
+		self:SecureHook('MoneyInputFrame_OnTextChanged', SendMailFrame_CanSend)
+		self:SecureHook('SetItemRef')
+		self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
+		self:HookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
+		self:HookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
+		self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
+	
+		SendMailMailButton:Enable()
+        end
 end
 
 function BulkMail:MAIL_CLOSED()
-	self:UnhookAll()
-	sendCacheCleanup()
-	self:HideSendQueueGUI()
-	self:CancelScheduledEvent('BM_SendLoop')
+        if mailIsVisible then
+		mailIsVisible = nil
+		self:UnhookAll()
+		sendCacheCleanup()
+		self:HideSendQueueGUI()
+		self:CancelScheduledEvent('BM_SendLoop')
+        end
 end
+
 BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't get called if, for example, the player accepts a port with the mail window open
 
 --[[----------------------------------------------------------------------------
@@ -606,7 +614,7 @@ end
 -- it must be the destination; otherwise, defaultDestination is used.
 -- This is the function called by /bm autosend add.
 function BulkMail:AddAutoSendRule(...)
-	local dest = select(1, ...)
+        local dest = select(1, ...)
 	local start = 2
 	if string.match(dest, "^|[cC]") or pt:IsSetMulti(dest) ~= nil then
 		dest = self.db.char.defaultDestination  -- first arg is an item or PT set, not a name, so use default (validation that default exists is handled by AceOptions)
@@ -614,6 +622,8 @@ function BulkMail:AddAutoSendRule(...)
 	end
 	self:AddDestination(dest)
 	for i = start, select('#', ...) do
+	   local th = select( i, ...)
+	   print (i, " = ", th)
 		local itemID = tonumber(string.match(select(i, ...), "item:(%d+)"))
 		if itemID then  -- is an item link
 			table.insert(autoSendRules[dest].include.items, itemID)
@@ -700,11 +710,12 @@ end
 --[[----------------------------------------------------------------------------
   Mailbox SendQueue GUI (original Tablet conversion by Kemayo)
 ------------------------------------------------------------------------------]]
+
 local function tabletClose(tabletID)
-	tablet:Close(tabletID)
+       tablet:Close(tabletID)
 end
 
-local function uiClose(tabletID)
+local function uiClose(obj, tabletID)
 	BulkMail:ScheduleEvent(tabletClose, 0, tabletID)
 end
 
@@ -716,16 +727,14 @@ local function getLockedContainerItem()
 			end
 		end
 	end
-end
+     end
 
-local function onSendQueueItemSelect(bag, slot)
-	self:Print("onSendQueueItemSelect")
---	if bag and slot and arg1 == 'LeftButton' then
-	if bag and slot then	--quick fix until arg1 can be passed in
+local function onSendQueueItemSelect(obj, bag, slot)
+	if bag and slot then
 		if IsAltKeyDown() then
 			sendCacheToggle(bag, slot)
-		elseif IsShiftKeyDown() and ChatFrameEditBox:IsVisible() then
-			ChatFrameEditBox:Insert(GetContainerItemLink(bag, slot))
+		elseif IsShiftKeyDown() and ChatFrame1EditBox:IsVisible() then
+			ChatFrame1EditBox:Insert(GetContainerItemLink(bag, slot))
 		elseif IsControlKeyDown() and not IsShiftKeyDown() then
 			DressUpItemLink(GetContainerItemLink(bag, slot))
 		else
@@ -934,17 +943,17 @@ function BulkMail:RegisterAddRuleDewdrop()
 	dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt31SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
 end
 
-local function headerClickFunc(dest)
-	if IsAltKeyDown() and not dest == "globalExclude" then
-		confirmedDestToRemove = dest
-		StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
-	else
-		shown[dest] = not shown[dest]
-	end
-	tablet:Refresh('BM_AutoSendEditTablet')
+local function headerClickFunc(obj, dest)
+	if IsAltKeyDown() and dest ~= "globalExclude" then
+	       confirmedDestToRemove = dest
+	       StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
+       else
+	       shown[dest] = not shown[dest]
+       end
+       tablet:Refresh('BM_AutoSendEditTablet')
 end
 
-local function showRulesetDD(ruleset)
+local function showRulesetDD(obj, ruleset)
 	curRuleSet = ruleset
 	updateDynamicARDTables()
 	createItemInputDDTable()
@@ -1019,6 +1028,7 @@ local function fillAutoSendEditTablet()
 				'func', headerClickFunc, 'arg1', dest
 			)
 			-- rules lists; collapsed/expanded by clicking the destination characters' names
+
 			if shown[dest] then
 				-- "include" rules for this destination; clicking brings up menu to add new include rules
 				cat:AddLine('text', L["Include"], 'indentation', 10, 'func', showRulesetDD, 'arg1', rulesets.include)
