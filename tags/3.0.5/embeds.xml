@@ -1,0 +1,26 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\FrameXML\UI.xsd">
+
+<Script file="lib\Ace2\AceLibrary\AceLibrary.lua"/>
+<Script file="lib\Ace2\AceOO-2.0\AceOO-2.0.lua"/>
+<Script file="lib\Ace2\AceEvent-2.0\AceEvent-2.0.lua"/>
+<Script file="lib\Ace2\AceAddon-2.0\AceAddon-2.0.lua"/>
+<Script file="lib\Ace2\AceHook-2.1\AceHook-2.1.lua"/>
+<Script file="lib\Ace2\AceDB-2.0\AceDB-2.0.lua"/>
+<Script file="lib\Ace2\AceConsole-2.0\AceConsole-2.0.lua"/>
+<Script file="lib\Ace2\AceLocale-2.2\AceLocale-2.2.lua"/>
+
+<Script file="lib\Tablet-2.0\Tablet-2.0.lua"/>
+<Script file="lib\Dewdrop-2.0\Dewdrop-2.0.lua"/>
+<Script file="lib\Gratuity-2.0\Gratuity-2.0.lua"/>
+<Script file="lib\Abacus-2.0\Abacus-2.0.lua"/>
+<Script file="lib\FuBarPlugin-2.0\FuBarPlugin-2.0.lua"/>
+
+<Script file="lib\LibPeriodicTable-3.1\LibPeriodicTable-3.1.lua"/>
+<Script file="lib\LibPeriodicTable-3.1-Consumable\LibPeriodicTable-3.1-Consumable.lua"/>
+<Script file="lib\LibPeriodicTable-3.1-Misc\LibPeriodicTable-3.1-Misc.lua"/>
+<Script file="lib\LibPeriodicTable-3.1-Reputation\LibPeriodicTable-3.1-Reputation.lua"/>
+<Script file="lib\LibPeriodicTable-3.1-Tradeskill\LibPeriodicTable-3.1-Tradeskill.lua"/>
+<Script file="lib\LibPeriodicTable-3.1-TradeskillResultMats\LibPeriodicTable-3.1-TradeskillResultMats.lua"/>
+
+</Ui>
