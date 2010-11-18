@@ -1,8 +1,8 @@
 ﻿## Interface: 40000
-## Title: BulkMail |cff7fff7f -Ace2-|r
+## Title: Bulk Mail 3 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
-## Version: 3.0.4
+## Version: 4.0.0 beta
 ## Author: NeoTron
 ## X-Credits: hyperactiveChipmunk, Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
 ## X-Thanks: hyperactiveChipmunk for making the addon and letting me (NeoTron) take it over
