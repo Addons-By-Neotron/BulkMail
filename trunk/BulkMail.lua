@@ -625,8 +625,6 @@ function BulkMail:AddAutoSendRule(...)
    end
    self:AddDestination(dest)
    for i = start, select('#', ...) do
-      local th = select( i, ...)
-      print (i, " = ", th)
       local itemID = tonumber(string.match(select(i, ...), "item:(%d+)"))
       if itemID then  -- is an item link
 	 table.insert(autoSendRules[dest].include.items, itemID)
@@ -718,7 +716,7 @@ local function tabletClose(tabletID)
    tablet:Close(tabletID)
 end
 
-local function uiClose(obj, tabletID)
+local function uiClose(tabletID)
    BulkMail:ScheduleEvent(tabletClose, 0, tabletID)
 end
 
@@ -732,7 +730,7 @@ local function getLockedContainerItem()
    end
 end
 
-local function onSendQueueItemSelect(obj, bag, slot)
+local function onSendQueueItemSelect(bag, slot)
    if bag and slot then
       if IsAltKeyDown() then
 	 sendCacheToggle(bag, slot)
@@ -944,7 +942,7 @@ function BulkMail:RegisterAddRuleDewdrop()
    dewdrop:Register('BM_AddRuleDD', 'children', function() dewdrop:FeedTable(new(newHash('text', L["Add rule"], 'isTitle', true), bagItemsDDTable, itemInputDDTable, itemTypesDDTable, pt31SetsDDTable)) end, 'cursorX', true, 'cursorY', true)
 end
 
-local function headerClickFunc(obj, dest)
+local function headerClickFunc(dest)
    if IsAltKeyDown() and dest ~= "globalExclude" then
       confirmedDestToRemove = dest
       StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION')
@@ -954,7 +952,7 @@ local function headerClickFunc(obj, dest)
    tablet:Refresh('BM_AutoSendEditTablet')
 end
 
-local function showRulesetDD(obj, ruleset)
+local function showRulesetDD(ruleset)
    curRuleSet = ruleset
    updateDynamicARDTables()
    createItemInputDDTable()
