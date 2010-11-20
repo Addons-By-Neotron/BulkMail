@@ -10,7 +10,7 @@
 ## X-eMail: neotron@gmail.com
 ## X-Website: http://wowace.com/wiki/BulkMail2
 ## SavedVariables: BulkMail2DB
-## OptionalDeps: Ace2, LibDropdown-1.0, LibQTip-1.0, LibGratuity-3.0, AbacusLib, FuBar, FuBarPlugin-2.0, LibPeriodicTable-3.1
+## OptionalDeps: Ace2, LibDropdown-1.0, LibQTip-1.0, LibGratuity-3.0, LibAbacus-3.0, FuBar, FuBarPlugin-2.0, LibPeriodicTable-3.1
 ## LoadManagers: SupplyAndDemand, ForkliftGnome, AddonLoader
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
