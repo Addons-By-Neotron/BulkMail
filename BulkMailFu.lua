@@ -34,7 +34,7 @@ function BulkMailFu:OnMenuRequest()
 end
 
 function BulkMailFu:OnClick()
-	if BulkMail then BulkMail:OpenAutoSendEditTablet() end
+	if BulkMail then BulkMail:OpenEditQTip() end
 end
 
 function BulkMailFu:OnTooltipUpdate()
