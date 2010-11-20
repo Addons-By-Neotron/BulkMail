@@ -7,10 +7,9 @@ BulkMail.L = L
 
 local LibStub = LibStub
 
-local abacus   = AceLibrary('Abacus-2.0')
-local pt       = AceLibrary('LibPeriodicTable-3.1')
-
-local gratuity = LibStub:GetLibrary('LibGratuity-3.0')
+local pt       = LibStub:GetLibrary('LibPeriodicTable-3.1')
+local abacus   = LibStub:GetLibrary("LibAbacus-3.0")
+local gratuity = LibStub:GetLibrary("LibGratuity-3.0")
 local QTIP     = LibStub:GetLibrary("LibQTip-1.0")
 local LD       = LibStub:GetLibrary("LibDropdown-1.0")
 
@@ -867,7 +866,7 @@ local function updateInventoryConfigTable()
    deepDel(InventoryConfigTable)
    InventoryConfigTable = newHash(
       'type', "group",
-      'name', L["Items from Bag"],
+      'name', L["Items from Bags"],
       'desc', L["Mailable items in your bags."], 
       'args', new()
    )
