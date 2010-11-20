@@ -7,11 +7,8 @@ BulkMail.L = L
 
 local LibStub = LibStub
 
-local tablet   = AceLibrary('Tablet-2.0')
-
 local abacus   = AceLibrary('Abacus-2.0')
 local pt       = AceLibrary('LibPeriodicTable-3.1')
-local dewdrop  = AceLibrary('Dewdrop-2.0')
 
 local gratuity = LibStub:GetLibrary('LibGratuity-3.0')
 local QTIP     = LibStub:GetLibrary("LibQTip-1.0")
@@ -72,7 +69,6 @@ local min = math.min
 local print = print
 local strlen = strlen
 local strsplit = strsplit
-local SendMailFrame_CanSend = SendMailFrame_CanSend
 local SendMailMailButton = SendMailMailButton
 local SendMailMoney = SendMailMoney
 local SendMailNameEditBox = SendMailNameEditBox
@@ -312,7 +308,8 @@ local function sendCacheAdd(bag, slot, squelch)
       gratuity:SetBagItem(bag, slot)
       if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true) then
 	 sendCache[bag] = sendCache[bag] or new()
-	 sendCache[bag][slot] = true; numItems = numItems + 1
+	 sendCache[bag][slot] = true;
+	 numItems = numItems + 1
 	 shadeBagSlot(bag,slot,true)
 	 if not squelch then BulkMail:RefreshSendQueueGUI() end
 	 SendMailFrame_CanSend()
@@ -415,9 +412,6 @@ Setup
 ------------------------------------------------------------------------------]]
 function BulkMail:OnInitialize()
    self:RegisterDB('BulkMail2DB')
-   self:RegisterDefaults('profile', {
-			    tablet_data = { detached = true, anchor = "TOPLEFT", offsetx = 340, offsety = -104 }
-			 })
    self:RegisterDefaults('realm', {
 			    autoSendRules = {
 			       ['*'] = {
@@ -490,7 +484,7 @@ function BulkMail:OnInitialize()
 	       clear = {
 		  name = L["clear"], type = 'execute',
 		  desc = L["Clear all rules for this realm."],
-		  func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end tablet:Refresh('BM_AutoSendEditTablet') end, confirm = true,
+		  func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end BulkMail:RefreshEditQTip() end, confirm = true,
 	       },
 	    },
 	 },
@@ -532,13 +526,11 @@ function BulkMail:OnEnable()
    if MailFrame:IsVisible() then
       self:MAIL_SHOW()
    end
-   self:RegisterSendQueueGUI()
 end
 
 function BulkMail:OnDisable()
    self:UnregisterAllEvents()
    self:UnhookAll()
-   if tablet:IsRegistered('BM_SendQueueTablet') then tablet:Unregister('BM_SendQueueTablet') end
 end
 
 --[[----------------------------------------------------------------------------
@@ -593,7 +585,7 @@ function BulkMail:SendMailFrame_CanSend()
       SendMailMailButton:Enable()
       SendMailCODButton:Enable()
    end
-   self:ScheduleEvent('BM_canSendRefresh', self.RefreshSendQueueGUI, 0.1, self)
+   self:ScheduleEvent('canSendRefresh', self.RefreshSendQueueGUI, 0.1, self)
 end
 
 function BulkMail:ContainerFrame_Update(...)
@@ -784,131 +776,6 @@ function BulkMail:QuickSend(bag, slot)
 end
 
 --[[----------------------------------------------------------------------------
-Mailbox SendQueue GUI (original Tablet conversion by Kemayo)
-------------------------------------------------------------------------------]]
-
-local function tabletClose(tabletID)
-   tablet:Close(tabletID)
-end
-
-local function uiClose(tabletID)
-   BulkMail:ScheduleEvent(tabletClose, 0, tabletID)
-end
-
-local function getLockedContainerItem()
-   for bag=0, NUM_BAG_SLOTS do
-      for slot=1, GetContainerNumSlots(bag) do
-	 if select(3, GetContainerItemInfo(bag, slot)) then
-	    return bag, slot
-	 end
-      end
-   end
-end
-
-local function onSendQueueItemSelect(bag, slot)
-   if bag and slot then
-      local editBox = ChatEdit_GetActiveWindow()
-      if IsAltKeyDown() then
-	 sendCacheToggle(bag, slot)
-      elseif IsShiftKeyDown() and editBox and editBox:IsVisible() then
-	 editBox:Insert(GetContainerItemLink(bag, slot))
-      elseif IsControlKeyDown() and not IsShiftKeyDown() then
-	 DressUpItemLink(GetContainerItemLink(bag, slot))
-      else
-	 SetItemRef(strmatch(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)"), GetContainerItemLink(bag, slot), arg1)
-      end
-   end
-end
-
-local function onDropClick()
-   if GetSendMailItem() then
-      BulkMail:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
-   end
-   if CursorHasItem() and getLockedContainerItem() then
-      sendCacheAdd(getLockedContainerItem())
-      PickupContainerItem(getLockedContainerItem())  -- clears the cursor
-   end
-   BulkMail:RefreshSendQueueGUI()
-end
-
-local function onSendClick()
-   if sendCache then BulkMail:SendMailMailButton_OnClick() end
-end
-
-function BulkMail:RegisterSendQueueGUI()
-   if not tablet:IsRegistered('BM_SendQueueTablet') then
-      tablet:Register('BM_SendQueueTablet', 'detachedData', self.db.profile.tablet_data, 'strata', "HIGH",
-		      'cantAttach', true, 'dontHook', true, 'showTitleWhenDetached', true, 'children',
-		      function()
-			 local cat = tablet:AddCategory('columns', 2, 'text', L["Items to be sent (Alt-Click to add/remove):"],
-							'showWithoutChildren', true, 'child_indentation', 5)
-			 if sendCache and next(sendCache) then
-			    local itemLink, itemText, texture, qty
-			    for bag, slots in pairs(sendCache) do
-			       for slot in pairs(slots) do
-				  itemLink = GetContainerItemLink(bag, slot)
-				  if itemLink then
-				     itemText = GetItemInfo(itemLink)
-				     texture, qty = GetContainerItemInfo(bag, slot)
-				     if qty and qty > 1 then
-					itemText = fmt("%s(%d)", itemText, qty)
-				     end
-				     cat:AddLine('text', itemText, 'text2', sendDest == '' and (rulesCacheDest(itemLink) or self.db.char.defaultDestination),
-						 'checked', true, 'hasCheck', true, 'checkIcon', texture,
-						 'func', onSendQueueItemSelect, 'arg1', bag, 'arg2', slot
-					      )
-				  end
-			       end
-			    end
-			 else
-			    cat:AddLine('text', L["No items selected"])
-			 end
-			 
-			 cat = tablet:AddCategory('columns', 1)
-			 cat:AddLine('text', L["Drop items here for Sending"], 'justify', "CENTER", 'func', onDropClick)
-			 
-			 if sendCache and next(sendCache) then
-			    cat = tablet:AddCategory('columns', 1)
-			    cat:AddLine('text', L["Clear"], 'func', sendCacheCleanup)
-			    if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
-			       cat:AddLine('text', L["Send"], 'func', onSendClick)
-			    else
-			       cat:AddLine('text', L["Send"], 'textR', 0.5, 'textG', 0.5, 'textB', 0.5)
-			    end
-			 else
-			    cat = tablet:AddCategory('columns', 1, 'child_textR', 0.5, 'child_textG', 0.5, 'child_textB', 0.5)
-			    cat:AddLine('text', L["Clear"])
-			    cat:AddLine('text', L["Send"])
-			 end
-			 cat = tablet:AddCategory('columns', 1)
-			 cat:AddLine()
-			 cat:AddLine('text', L["Close"], 'func', uiClose, 'arg1', 'BM_SendQueueTablet')
-		      end
-		   )
-   end
-end
-
-function BulkMail:ShowSendQueueGUI()
-   if not tablet:IsRegistered('BM_SendQueueTablet') then
-      self:RegisterSendQueueGUI()
-   end
-   tablet:Open('BM_SendQueueTablet')
-end
-
-function BulkMail:HideSendQueueGUI()
-   if tablet:IsRegistered('BM_SendQueueTablet') then
-      tablet:Close('BM_SendQueueTablet')
-   end
-end
-
-function BulkMail:RefreshSendQueueGUI()
-   if not tablet:IsRegistered('BM_SendQueueTablet') then
-      self:RegisterSendQueueGUI()
-   end
-   tablet:Refresh('BM_SendQueueTablet')
-end
-
---[[----------------------------------------------------------------------------
 QTip Windows -- AutoSend Edit GUI
 ------------------------------------------------------------------------------]]
 local shown = {}  -- keeps track of collapsed/expanded state in tablet
@@ -931,6 +798,7 @@ local function _insertOrRemoveRule(ruletype, value)
       end
       if removed then
 	 tremove(curRuleSet[ruletype], i)
+	 rulesAltered = true   
 	 if type(value) == "table" then
 	    del(value)
 	 end
@@ -939,8 +807,8 @@ local function _insertOrRemoveRule(ruletype, value)
    end
    if not removed then
       tinsert(curRuleSet[ruletype], value)
+      rulesAltered = true   
    end
-
    BulkMail:OpenEditQTip()   
 end
 
@@ -1143,7 +1011,7 @@ local function _toggleEditHeader(frame, dest)
    BulkMail:OpenEditQTip()   
 end
 
-local function listRulesQTip(tooltip, ruleset)
+local function _listRulesQTip(tooltip, ruleset)
    local x, y
    local addedRule
    if ruleset then
@@ -1190,8 +1058,9 @@ local function listRulesQTip(tooltip, ruleset)
    
 end
 
-local function _sendEditQueueClose()
-   local tooltip = BulkMail.editQueueTooltip
+
+local function _QTipClose(tooltip)
+   if not tooltip then return end
    BulkMail.editQueueTooltip = nil
    tooltip:EnableMouse(false)
    tooltip:SetScript("OnDragStart", nil)
@@ -1200,9 +1069,14 @@ local function _sendEditQueueClose()
    tooltip:RegisterForDrag()
    tooltip:SetFrameStrata("TOOLTIP")
    QTIP:Release(tooltip)
+end
 
+local function _sendEditQueueClose()
+   _QTipClose(BulkMail.editQueueTooltip)
+   BulkMail.editQueueTooltip = nil
    menuFrame = menuFrame and menuFrame:Release()
 end
+
 function BulkMail:RefreshEditQTip()
    if BulkMail.editQueueTooltip then
       BulkMail:OpenEditQTip()
@@ -1225,7 +1099,7 @@ function BulkMail:OpenEditQTip()
    else
       tooltip:Clear()      
    end
- 
+   
    local y = tooltip:AddHeader();
    tooltip:SetCell(y, 1, color(L["AutoSend Rules"], "ffd200"), tooltip:GetHeaderFont(), "CENTER", 1)
    tooltip:AddLine(" ")
@@ -1238,10 +1112,10 @@ function BulkMail:OpenEditQTip()
 	 tooltip:SetLineScript(y, "OnMouseUp", _toggleEditHeader, dest)
 	 if shown[dest] then
 	    _addIndentedCell(tooltip, color(L["Include"], "ffd200"), 20, _showmenu, rulesets.include)
-	    listRulesQTip(tooltip, rulesets.include)
+	    _listRulesQTip(tooltip, rulesets.include)
 	    -- "exclude" rules for this destination; clicking brings up menu to add new exclude rules	
 	    _addIndentedCell(tooltip, color(L["Exclude"], "ffd200"), 20, _showmenu, rulesets.exclude)
-	    listRulesQTip(tooltip, rulesets.exclude)
+	    _listRulesQTip(tooltip, rulesets.exclude)
 	    tooltip:AddLine(" ")
 	 end
       end
@@ -1253,7 +1127,7 @@ function BulkMail:OpenEditQTip()
 
    if shown.globalExclude then
       _addIndentedCell(tooltip,color(L["Exclude"], "ffd200"), 20, _showmenu, globalExclude)
-      listRulesQTip(tooltip, globalExclude)
+      _listRulesQTip(tooltip, globalExclude)
    end
 
    tooltip:AddLine(" ")
@@ -1265,12 +1139,152 @@ function BulkMail:OpenEditQTip()
    y = tooltip:AddLine()
    tooltip:SetCell(y, 1, color(L["Hint: "]..L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."], "ffff00"), nil, "LEFT", 1, nil, nil, nil, 250)
    
-   -- set max height to be 90% of the screen height
    tooltip:SetFrameStrata("DIALOG")
+   -- set max height to be 90% of the screen height
    tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.9)
    tooltip:Show()
 
 end
+
+--[[----------------------------------------------------------------------------
+QTip Windows -- Send Queue Edit GUI
+------------------------------------------------------------------------------]]
+
+local function getLockedContainerItem()
+   for bag=0, NUM_BAG_SLOTS do
+      for slot=1, GetContainerNumSlots(bag) do
+	 if select(3, GetContainerItemInfo(bag, slot)) then
+	    return bag, slot
+	 end
+      end
+   end
+end
+
+local function onSendQueueItemSelect(bag, slot)
+   if bag and slot then
+      local editBox = ChatEdit_GetActiveWindow()
+      if IsAltKeyDown() then
+	 sendCacheToggle(bag, slot)
+      elseif IsShiftKeyDown() and editBox and editBox:IsVisible() then
+	 editBox:Insert(GetContainerItemLink(bag, slot))
+      elseif IsControlKeyDown() and not IsShiftKeyDown() then
+	 DressUpItemLink(GetContainerItemLink(bag, slot))
+      else
+	 SetItemRef(strmatch(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)"), GetContainerItemLink(bag, slot), arg1)
+      end
+   end
+end
+
+local function onDropClick()
+   if GetSendMailItem() then
+      BulkMail:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
+   end
+   if CursorHasItem() and getLockedContainerItem() then
+      sendCacheAdd(getLockedContainerItem())
+      PickupContainerItem(getLockedContainerItem())  -- clears the cursor
+   end
+   BulkMail:RefreshSendQueueGUI()
+end
+
+local function onSendClick()
+   if sendCache then BulkMail:SendMailMailButton_OnClick() end
+end
+
+function BulkMail:HideSendQueueGUI()
+   _QTipClose(BulkMail.sendQueueTooltip)
+   BulkMail.sendQueueTooltip = nil
+end
+
+function BulkMail:RefreshSendQueueGUI()
+   if BulkMail.sendQueueTooltip then
+      BulkMail:ShowSendQueueGUI()
+   end
+end
+
+function BulkMail:ShowSendQueueGUI()
+   local tooltip = BulkMail.sendQueueTooltip
+   if not tooltip then
+      tooltip = QTIP:Acquire("BulkMail3SendQueueTooltip")
+      tooltip:EnableMouse(true)
+      tooltip:SetScript("OnDragStart", tooltip.StartMoving)
+      tooltip:SetScript("OnDragStop", tooltip.StopMovingOrSizing)
+      tooltip:RegisterForDrag("LeftButton")
+      tooltip:SetMovable(true)
+      tooltip:SetColumnLayout(2, "LEFT", "RIGHT")
+      self.sendQueueTooltip = tooltip
+      tooltip:SetPoint("LEFT", MailFrame, "RIGHT", -5, 40)
+   else
+      tooltip:Clear()      
+   end
+
+   local y = tooltip:AddHeader();
+   tooltip:SetCell(y, 1, L["Items to be sent (Alt-Click to add/remove):"], tooltip:GetFont(), "CENTER", 2)
+   tooltip:AddLine(" ")
+
+   if sendCache and next(sendCache) then
+      local itemLink, itemText, texture, qty
+      for bag, slots in pairs(sendCache) do
+	 for slot in pairs(slots) do
+	    itemLink = GetContainerItemLink(bag, slot)
+	    if itemLink then
+	       itemText = GetItemInfo(itemLink)
+	       texture, qty = GetContainerItemInfo(bag, slot)
+	       if qty and qty > 1 then
+		  itemText = fmt("|T%s:18|t |cffffd200%s (%d)|r", texture, itemText, qty)
+	       else
+		  itemText = fmt("|T%s:18|t |cffffd200%s|r", texture, itemText)
+	       end
+	       local y = _addIndentedCell(tooltip, itemText, 5, function(self)
+								   onSendQueueItemSelect(bag, slot)
+								end)
+	       local recipient
+	       if sendDest == '' or not sendDest then 
+		  recipient = (rulesCacheDest(itemLink) or self.db.char.defaultDestination)
+		  if not recipient or strlen(recipient) == 0 then
+		     recipient = color(L["Missing"], "ff0000")
+		  else
+		     recipient = color(recipient, "ffd200")
+		  end
+	       else
+		  recipient = color(sendDest, "00d2ff")
+	       end
+	       tooltip:SetCell(y, 2, recipient)
+	    end
+	 end
+      end
+   else
+      _addIndentedCell(tooltip, color(L["No items selected"], "ffd200"), 5)
+   end
+   
+   
+   tooltip:AddLine(" ")
+   local y = tooltip:AddLine();
+   tooltip:SetCell(y, 1, color(L["Drop items here for Sending"], "ffd200"), tooltip:GetFont(), "CENTER", 2)
+   tooltip:SetLineScript(y, "OnReceiveDrag", onDropClick)
+   tooltip:SetLineScript(y, "OnMouseUp", onDropClick)
+   tooltip:AddLine(" ")
+   
+   if sendCache and next(sendCache) then
+      _addIndentedCell(tooltip, color(L["Clear"], "ffd200"), 5, sendCacheCleanup)
+      if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
+	 _addIndentedCell(tooltip, color(L["Send"], "ffd200"), 5, onSendClick)
+      else
+	 _addIndentedCell(tooltip, color(L["Send"], "7f7f7f"), 5)
+      end
+   else
+      _addIndentedCell(tooltip, color(L["Clear"], "7f7f7f"), 5)
+      _addIndentedCell(tooltip, color(L["Send"],  "7f7f7f"), 5)
+   end
+   tooltip:AddLine(" ")
+
+   _addIndentedCell(tooltip, color(L["Close"], "ffd200"), 5, BulkMail.HideSendQueueGUI, BulkMail)
+
+   tooltip:SetFrameStrata("FULLSCREEN")
+   -- set max height to be 90% of the screen height
+   tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.9)
+   tooltip:Show()   
+end
+
 
 --[[----------------------------------------------------------------------------
 StaticPopups
