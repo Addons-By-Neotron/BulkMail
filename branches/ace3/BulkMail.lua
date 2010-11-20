@@ -349,6 +349,7 @@ end
 -- If passed with the argument 'true', will only remove the entries created by
 -- BulkMail (used for refreshing the list as the destination changes without
 -- clearing the items the user has added manually this session).
+
 local function sendCacheCleanup(autoOnly)
    if sendCache then
       for bag, slots in pairs(sendCache) do
@@ -466,7 +467,7 @@ function BulkMail:OnInitialize()
 	       edit = {
 		  name = L["edit"], type = 'execute', aliases = L["rules, list, ls"],
 		  desc = L["Edit AutoSend definitions."],
-		  func = function() BulkMail:OpenEditQTip() end,
+		  func = function() BulkMail:OpenEditTooltipGUI() end,
 	       },
 	       add = {
 		  name = L["add"], type = 'text', aliases = L["+"],
@@ -483,7 +484,7 @@ function BulkMail:OnInitialize()
 	       clear = {
 		  name = L["clear"], type = 'execute',
 		  desc = L["Clear all rules for this realm."],
-		  func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end BulkMail:RefreshEditQTip() end, confirm = true,
+		  func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end BulkMail:RefreshEditTooltipGUI() end, confirm = true,
 	       },
 	    },
 	 },
@@ -643,8 +644,8 @@ end
 
 function BulkMail:MailFrameTab2_OnClick(frame, a1)
    rulesCacheBuild()
-   self:ShowSendQueueGUI()
    sendCacheBuild(SendMailNameEditBox:GetText())
+   self:ShowSendQueueGUI()
    return self.hooks[frame].OnClick(frame, a1)
 end
 
@@ -694,11 +695,11 @@ function BulkMail:AddAutoSendRule(...)
       local itemID = tonumber(strmatch(select(i, ...), "item:(%d+)"))
       if itemID then  -- is an item link
 	 tinsert(autoSendRules[dest].include.items, itemID)
-	 mod:RefreshEditQTip()	 
+	 mod:RefreshEditTooltipGUI()	 
 	 self:Print("%s - %s", select(i, ...), dest)
       elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT31 set
 	 tinsert(autoSendRules[dest].include.pt31Sets, select(i, ...))
-	 mod:RefreshEditQTip()	 
+	 mod:RefreshEditTooltipGUI()	 
 	 self:Print("%s - %s", select(i, ...), dest)
       end
    end
@@ -797,7 +798,6 @@ local function _insertOrRemoveRule(ruletype, value)
       end
       if removed then
 	 tremove(curRuleSet[ruletype], i)
-	 rulesAltered = true   
 	 if type(value) == "table" then
 	    del(value)
 	 end
@@ -806,9 +806,9 @@ local function _insertOrRemoveRule(ruletype, value)
    end
    if not removed then
       tinsert(curRuleSet[ruletype], value)
-      rulesAltered = true   
    end
-   BulkMail:OpenEditQTip()   
+   rulesAltered = true   
+   BulkMail:RefreshEditTooltipGUI()   
 end
 
 local function _editCallbackMethod(args, val)
@@ -1007,7 +1007,7 @@ local function _toggleEditHeader(frame, dest)
    else
       shown[dest] = not shown[dest]
    end
-   BulkMail:OpenEditQTip()   
+   BulkMail:RefreshEditTooltipGUI()   
 end
 
 local function _listRulesQTip(tooltip, ruleset)
@@ -1022,7 +1022,7 @@ local function _listRulesQTip(tooltip, ruleset)
 			    menuFrame = menuFrame and menuFrame:Release()
 			    if IsAltKeyDown() then
 			       tremove(rules, k)
-			       BulkMail:OpenEditQTip()
+			       BulkMail:RefreshEditTooltipGUI()
 			       rulesAltered = true
 			    end
 			 end
@@ -1071,19 +1071,27 @@ local function _QTipClose(tooltip)
 end
 
 local function _sendEditQueueClose()
+   print ('closing')
    _QTipClose(BulkMail.editQueueTooltip)
    BulkMail.editQueueTooltip = nil
    menuFrame = menuFrame and menuFrame:Release()
 end
 
-function BulkMail:RefreshEditQTip()
+function BulkMail:RefreshEditTooltipGUI()
+   if rulesAltered then
+      sendCacheCleanup(true)
+      rulesCacheBuild()
+      if BulkMail.sendQueueTooltip then	 
+	 sendCacheBuild(SendMailNameEditBox:GetText())
+	 BulkMail:RefreshSendQueueGUI()
+      end
+   end
    if BulkMail.editQueueTooltip then
-      BulkMail:OpenEditQTip()
+      BulkMail:OpenEditTooltipGUI()
    end
 end
 
-function BulkMail:OpenEditQTip()
-   
+function BulkMail:OpenEditTooltipGUI()
    local tooltip = BulkMail.editQueueTooltip
    if not tooltip then
       tooltip = QTIP:Acquire("BulkMail3EditQueueTooltip")
@@ -1136,7 +1144,7 @@ function BulkMail:OpenEditQTip()
 
    tooltip:AddLine(" ")
    y = tooltip:AddLine()
-   tooltip:SetCell(y, 1, color(L["Hint: "]..L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."], "ffff00"), nil, "LEFT", 1, nil, nil, nil, 250)
+   tooltip:SetCell(y, 1, color(L["Hint: "]..L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."], "ffff00"), tooltip:GetFont(), "LEFT", 1, nil, nil, nil, 250)
    
    tooltip:SetFrameStrata("DIALOG")
    -- set max height to be 90% of the screen height
@@ -1247,7 +1255,7 @@ function BulkMail:ShowSendQueueGUI()
 	       else
 		  recipient = color(sendDest, "00d2ff")
 	       end
-	       tooltip:SetCell(y, 2, recipient)
+	       tooltip:SetCell(y, 2, recipient, tooltip:GetFont())
 	    end
 	 end
       end
@@ -1294,7 +1302,7 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
    hasEditBox = 1, maxLetters = 20,
    OnAccept = function(self)
 		 BulkMail:AddDestination(_G[self:GetName().."EditBox"]:GetText())
-		 BulkMail:RefreshEditQTip()
+		 BulkMail:RefreshEditTooltipGUI()
 	      end,
    OnShow = function(self)
 	       _G[self:GetName().."EditBox"]:SetFocus()
@@ -1307,7 +1315,7 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	    end,
    EditBoxOnEnterPressed = function(self)
 			      BulkMail:AddDestination(_G[self:GetName()]:GetText())
-			      BulkMail:RefreshEditQTip()
+			      BulkMail:RefreshEditTooltipGUI()
 			      rulesAltered = true
 			      self:GetParent():Hide()
 			   end,
@@ -1322,7 +1330,7 @@ StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
    button1 = L["Accept"], button2 = L["Cancel"],
    OnAccept = function(self)
 		 BulkMail:RemoveDestination(confirmedDestToRemove)
-		 BulkMail:RefreshEditQTip()
+		 BulkMail:RefreshEditTooltipGUI()
 		 confirmedDestToRemove = nil
 		 rulesAltered = true
 	      end,
