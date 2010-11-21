@@ -3,7 +3,7 @@ BulkMail = LibStub("AceAddon-3.0"):NewAddon("BulkMail", "AceConsole-3.0", "AceEv
 local mod, self, BulkMail = BulkMail, BulkMail, BulkMail
 
 BulkMail.L = L
-
+local VERSION = " v4.0"
 local LibStub = LibStub
 
 local L        = LibStub("AceLocale-3.0"):GetLocale("BulkMail", false)
@@ -458,7 +458,7 @@ function mod:OnInitialize()
    if not BulkMail3DB then
       _convertBulkMail2DB()
    end
-   mod:Print("You're running a beta version of BulkMail 3/Ace 3.")
+   mod:Print("You're running a beta version of BulkMail 4.0 with Ace3 version.")
    mod:Print("Please make sure to report any problems in our ticket system.")
    _convertAce2ToAce3Realm = nil
    _convertBulkMail2DB = nil
@@ -565,12 +565,12 @@ function mod:OnInitialize()
    -- set up LDB
    if LDB then
       self.ldb =
-	 LDB:NewDataObject("BulkMail 3",
+	 LDB:NewDataObject("BulkMail",
 			   {
 			      type =  "launcher", 
-			      label = L["BulkMail 3"],
+			      label = L["Bulk Mail"]..VERSION,
 			      icon = [[Interface\Addons\BulkMail2\icon]],
-			      tooltiptext = color(L["BulkMail 3"].."\n\n", "ffff00")..color(L["Hint: Click to show the AutoSend Rules editor."].."\n"..
+			      tooltiptext = color(L["Bulk Mail"]..VERSION.."\n\n", "ffff00")..color(L["Hint: Click to show the AutoSend Rules editor."].."\n"..
 											  L["Middle click to open the config panel."].."\n"..
 											  L["Right click to open the config menu."], "ffd200"),
 			      OnClick = function(clickedframe, button)
@@ -585,7 +585,7 @@ function mod:OnInitialize()
 			   })
    end
 
-   self._mainConfig = self:OptReg(L["BulkMail 3"], self.opts,  { "bm", "bulkmail" })
+   self._mainConfig = self:OptReg(L["Bulk Mail"]..VERSION, self.opts,  { "bm", "bulkmail" })
 
    -- LoD PT31 Sets; yanked from Baggins
    local PT31Modules
@@ -1139,7 +1139,6 @@ end
 
 local function _QTipClose(tooltip)
    if not tooltip then return end
-   BulkMail.editQueueTooltip = nil
    tooltip:EnableMouse(false)
    tooltip:SetScript("OnDragStart", nil)
    tooltip:SetScript("OnDragStop", nil)
@@ -1150,7 +1149,7 @@ local function _QTipClose(tooltip)
 end
 
 local function _sendEditQueueClose()
-   print ('closing')
+   print('closing: ', BulkMail.editQueueTooltip)
    _QTipClose(BulkMail.editQueueTooltip)
    BulkMail.editQueueTooltip = nil
    menuFrame = menuFrame and menuFrame:Release()
@@ -1430,7 +1429,7 @@ function mod:OptReg(optname, tbl, cmd)
    local configPanes = self.configPanes or new()
    self.configPanes = configPanes
    AC:RegisterOptionsTable(optname, tbl, cmd)
-   regtable = ACD:AddToBlizOptions(optname, L["BulkMail 3"])
+   regtable = ACD:AddToBlizOptions(optname, L["Bulk Mail"])
    configPanes[#configPanes+1] = optname
    return regtable
 end
