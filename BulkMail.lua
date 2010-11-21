@@ -1,17 +1,21 @@
-BulkMail = AceLibrary('AceAddon-2.0'):new('AceDB-2.0', 'AceEvent-2.0', 'AceHook-2.1', 'AceConsole-2.0')
-local self, BulkMail = BulkMail, BulkMail
+BulkMail = LibStub("AceAddon-3.0"):NewAddon("BulkMail", "AceConsole-3.0", "AceEvent-3.0", "AceTimer-3.0", "AceHook-3.0")
 
-local L = AceLibrary('AceLocale-2.2'):new('BulkMail')
+local mod, self, BulkMail = BulkMail, BulkMail, BulkMail
 
 BulkMail.L = L
 
 local LibStub = LibStub
 
-local pt       = LibStub:GetLibrary('LibPeriodicTable-3.1')
-local abacus   = LibStub:GetLibrary("LibAbacus-3.0")
-local gratuity = LibStub:GetLibrary("LibGratuity-3.0")
-local QTIP     = LibStub:GetLibrary("LibQTip-1.0")
-local LD       = LibStub:GetLibrary("LibDropdown-1.0")
+local L        = LibStub("AceLocale-3.0"):GetLocale("BulkMail", false)
+local pt       = LibStub("LibPeriodicTable-3.1")
+local abacus   = LibStub("LibAbacus-3.0")
+local gratuity = LibStub("LibGratuity-3.0")
+local QTIP     = LibStub("LibQTip-1.0")
+local LD       = LibStub("LibDropdown-1.0")
+local AC       = LibStub("AceConfig-3.0")
+local ACD      = LibStub("AceConfigDialog-3.0")
+local DB       = LibStub("AceDB-3.0")
+local LDB      = LibStub("LibDataBroker-1.1", true)
 
 local SUFFIX_CHAR = "\32"
 
@@ -310,10 +314,10 @@ local function sendCacheAdd(bag, slot, squelch)
 	 sendCache[bag][slot] = true;
 	 numItems = numItems + 1
 	 shadeBagSlot(bag,slot,true)
-	 if not squelch then BulkMail:RefreshSendQueueGUI() end
+	 if not squelch then mod:RefreshSendQueueGUI() end
 	 SendMailFrame_CanSend()
       elseif not squelch then
-	 BulkMail:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
+	 mod:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
       end
    end
    updateSendCost()
@@ -330,7 +334,7 @@ local function sendCacheRemove(bag, slot)
       end
       if not next(sendCache[bag]) then sendCache[bag] = del(sendCache[bag]) end
    end
-   BulkMail:RefreshSendQueueGUI()
+   mod:RefreshSendQueueGUI()
    updateSendCost()
    SendMailFrame_CanSend()
 end
@@ -362,7 +366,7 @@ local function sendCacheCleanup(autoOnly)
       end
    end
    cacheLock = false
-   BulkMail:RefreshSendQueueGUI()
+   mod:RefreshSendQueueGUI()
 end
 
 -- Populate BulkMail's send queue with container slots holding items following
@@ -373,7 +377,7 @@ local function sendCacheBuild(dest)
       sendCacheCleanup(true)
       if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then
 	 -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
-	 return BulkMail:RefreshSendQueueGUI()
+	 return mod:RefreshSendQueueGUI()
       end
       for bag, slot, item in bagIter() do
 	 local target = rulesCacheDest(item)
@@ -384,7 +388,7 @@ local function sendCacheBuild(dest)
 	 end
       end
    end
-   BulkMail:RefreshSendQueueGUI()
+   mod:RefreshSendQueueGUI()
 end
 
 -- Organize the send queue by recipient in order to reduce fragmentation of multi-item mails
@@ -407,25 +411,82 @@ local function organizeSendCache()
    end
 end
 
+
+--[[----------------------------------------------------------------------------
+A little color never hurts
+------------------------------------------------------------------------------]]
+local function color(text, color)
+   return fmt("|cff%s%s|r", color, text)
+end
+
+
 --[[----------------------------------------------------------------------------
 Setup
 ------------------------------------------------------------------------------]]
-function BulkMail:OnInitialize()
-   self:RegisterDB('BulkMail2DB')
-   self:RegisterDefaults('realm', {
-			    autoSendRules = {
-			       ['*'] = {
-				  include = {
-				     ['*'] = {},
-				  },
-				  exclude = {
-				     ['*'] = {},
-				  },
-			       },
-			    },
-			 })
-   autoSendRules = self.db.realm.autoSendRules  -- local variable for speed/convenience
+
+local function _convertAce2ToAce3Realm(realm)
+   -- This could be more elegant but I hate lua patterns so ... whatever :P
+   startPos = realm:find(" - Horde", 1, true)
+   if startPos then
+      return "Horde - ".. realm:sub(1, startPos-1)
+   end
+   startPos = realm:find(" - Alliance", 1, true)
+   return "Alliance - ".. realm:sub(1, startPos-1)
+end
+
+local function _convertBulkMail2DB()
+   mod:Print("Converting BulkMail 2 configuration...")
+   local startPos
+   BulkMail3DB = new()
+   if BulkMail2DB.realms then
+      BulkMail3DB.factionrealm = new()
+      for realm, data in pairs(BulkMail2DB.realms) do
+	 realm = _convertAce2ToAce3Realm(realm)
+	 BulkMail3DB.factionrealm[realm] = data
+      end
+   end
+   if BulkMail2DB.chars then
+      BulkMail3DB.char = new()
+      for char, data in pairs(BulkMail2DB.chars) do
+	 BulkMail3DB.char[char] = data
+      end
+   end
+end
+
+function mod:OnInitialize()
+   -- Convert BulkMail2 config to new format
+   if not BulkMail3DB then
+      _convertBulkMail2DB()
+   end
+   mod:Print("You're running a beta version of BulkMail 3/Ace 3.")
+   mod:Print("Please make sure to report any problems in our ticket system.")
+   _convertAce2ToAce3Realm = nil
+   _convertBulkMail2DB = nil
+
+   self.db = DB:New("BulkMail3DB", {
+		       factionrealm = {
+			  autoSendRules = {
+			     ['*'] = {
+				include = {
+				   ['*'] = {},
+				},
+				exclude = {
+				   ['*'] = {},
+				},
+			     },
+			  },
+		       },
+		       char = {
+			  isSink = false,
+			  attachMulti = true,
+			  globalExclude = {
+			     ['*'] = {}
+			  },
+		       },
+		    }, "Default")
    
+   autoSendRules = self.db.factionrealm.autoSendRules  -- local variable for speed/convenience
+
    destCache = new()  -- destinations for which we have rules (or are going to add rules)
    reverseDestCache = new()  -- integer-indexed table of destinations
    for dest in pairs(autoSendRules) do
@@ -433,58 +494,56 @@ function BulkMail:OnInitialize()
       tinsert(reverseDestCache, dest)
    end
 
-   self:RegisterDefaults('char', {
-			    isSink = false,
-			    attachMulti = true,
-			    globalExclude = {
-			       ['*'] = {}
-			    },
-			 })
    globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
    auctionItemClasses = {}  -- local itemType value association table
+
    for i, itype in ipairs({GetAuctionItemClasses()}) do
       auctionItemClasses[itype] = {GetAuctionItemSubClasses(i)}
    end
 
    numItems = 0
    rulesAltered = true
-   
+
    self.opts = {
       type = 'group',
       args = {
 	 defaultdest = {
-	    name = L["Default destination"], type = 'text', aliases = L["dd"],
+	    name = L["Default destination"], type = 'input',
 	    desc = L["Set the default recipient of your AutoSend rules"],
 	    get = function() return self.db.char.defaultDestination end,
 	    set = function(dest) self.db.char.defaultDestination = dest end,
-	    usage = "<destination>",
 	 },
 	 autosend = {
-	    name = L["AutoSend"], type = 'group', aliases = L["as"],
+	    name = L["Auto Send Commands"], type = 'group', 
 	    desc = L["AutoSend Options"],
 	    args = {
 	       edit = {
-		  name = L["edit"], type = 'execute', aliases = L["rules, list, ls"],
+		  name = L["Edit Destinations"], type = 'execute',
 		  desc = L["Edit AutoSend definitions."],
-		  func = function() BulkMail:OpenEditTooltipGUI() end,
+		  func = function() mod:OpenEditTooltipGUI() end,
+		  order = 30, 
 	       },
 	       add = {
-		  name = L["add"], type = 'text', aliases = L["+"],
-		  desc = L["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."],
-		  input = true, set = 'AddAutoSendRule', usage = L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"], get = false,
-		  validate = function(arg1) return self.db.char.defaultDestination or (not strmatch(arg1, "^|[cC]") and not pt:IsSetMulti(arg1) ~= nil) end,
-		  error = L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."],
+		  name = L["Add Item Rule"], type = 'input', 
+		  desc = L["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."].. "\n"..L["Usage: "]..
+		     L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"],
+		  set = 'AddAutoSendRule', get = false,
+		  validate = function(args, val) return (self.db.char.defaultDestination or (not strmatch(val, "^|[cC]") and not pt:IsSetMulti(val) ~= nil) and
+						      L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])end,
+		  order = 20, 
 	       },
 	       rmdest = {
-		  name = L["rmdest"], type = 'text', aliases = L["rmd"],
-		  desc = "Remove all rules corresponding to a particular destination.",
-		  input = true, set = 'RemoveDestination', usage = L["<destination>"], get = false, validate = reverseDestCache,
+		  name = L["Remove Destination"], type = 'input',
+		  desc = L["Remove all rules corresponding to a particular destination."],
+		  set = 'RemoveDestination', get = false,
+		  order = 10, 
 	       },
 	       clear = {
-		  name = L["clear"], type = 'execute',
+		  name = L["Clear Realm rules"], type = 'execute',
 		  desc = L["Clear all rules for this realm."],
-		  func = function() self:ResetDB('realm') for i in pairs(autoSendRules) do autoSendRules[i] = nil end BulkMail:RefreshEditTooltipGUI() end, confirm = true,
+		  func = function() self.db.factionrealm = new() for i in pairs(autoSendRules) do autoSendRules[i] = nil end mod:RefreshEditTooltipGUI() end, confirm = true,
+		  order = 40
 	       },
 	    },
 	 },
@@ -492,17 +551,41 @@ function BulkMail:OnInitialize()
 	    name = L["Sink"], type = 'toggle',
 	    desc = L["Disable AutoSend queue auto-filling for this character."],
 	    get = function() return self.db.char.isSink end,
-	    set = function(v) self.db.char.isSink = v end,
+	    set = function(args,v) self.db.char.isSink = v end,
 	 },
 	 attachmulti = {
 	    name = L["Attach multiple items"], type = 'toggle',
 	    desc = L["Attach as many items as possible per mail."],
 	    get = function() return self.db.char.attachMulti end,
-	    set = function(v) self.db.char.attachMulti = v end,
+	    set = function(args, v) self.db.char.attachMulti = v end,
 	 },
       },
    }
-   self:RegisterChatCommand({"/bulkmail", "/bm"}, self.opts)
+
+   -- set up LDB
+   if LDB then
+      self.ldb =
+	 LDB:NewDataObject("BulkMail 3",
+			   {
+			      type =  "launcher", 
+			      label = L["BulkMail 3"],
+			      icon = [[Interface\Addons\BulkMail2\icon]],
+			      tooltiptext = color(L["BulkMail 3"].."\n\n", "ffff00")..color(L["Hint: Click to show the AutoSend Rules editor."].."\n"..
+											  L["Middle click to open the config panel."].."\n"..
+											  L["Right click to open the config menu."], "ffd200"),
+			      OnClick = function(clickedframe, button)
+					   if button == "LeftButton" then
+					      mod:OpenEditTooltipGUI(clickedframe)
+					   elseif button == "MiddleButton" then
+					      mod:ToggleConfigDialog()
+					   elseif button == "RightButton" then
+					      mod:OpenConfigMenu(clickedframe)
+ 					   end
+					end,
+			   })
+   end
+
+   self._mainConfig = self:OptReg(L["BulkMail 3"], self.opts,  { "bm", "bulkmail" })
 
    -- LoD PT31 Sets; yanked from Baggins
    local PT31Modules
@@ -517,7 +600,7 @@ function BulkMail:OnInitialize()
    end
 end
 
-function BulkMail:OnEnable()
+function mod:OnEnable()
    self:RegisterEvent('MAIL_SHOW')
    self:RegisterEvent('MAIL_CLOSED')
    self:RegisterEvent('PLAYER_ENTERING_WORLD')
@@ -528,7 +611,7 @@ function BulkMail:OnEnable()
    end
 end
 
-function BulkMail:OnDisable()
+function mod:OnDisable()
    self:UnregisterAllEvents()
    self:UnhookAll()
 end
@@ -537,7 +620,7 @@ end
 Events
 ------------------------------------------------------------------------------]]
 local mailIsVisible
-function BulkMail:MAIL_SHOW()
+function mod:MAIL_SHOW()
    if not mailIsVisible then
       mailIsVisible = true
       if rulesAltered then rulesCacheBuild() end
@@ -555,13 +638,13 @@ function BulkMail:MAIL_SHOW()
    end
 end
 
-function BulkMail:MAIL_CLOSED()
+function mod:MAIL_CLOSED()
    if mailIsVisible then
       mailIsVisible = nil
       self:UnhookAll()
       sendCacheCleanup()
       self:HideSendQueueGUI()
-      self:CancelScheduledEvent('BM_SendLoop')
+      self:CancelTimer(self.BM_SendLoop)
    end
 end
 
@@ -570,7 +653,7 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 --[[----------------------------------------------------------------------------
 Hooks
 ------------------------------------------------------------------------------]]
-function BulkMail:ContainerFrameItemButton_OnModifiedClick(frame, button)
+function mod:ContainerFrameItemButton_OnModifiedClick(frame, button)
    if IsControlKeyDown() and IsShiftKeyDown() then
       self:QuickSend(frame:GetParent():GetID(), frame:GetID())
    elseif IsAltKeyDown() then
@@ -580,15 +663,15 @@ function BulkMail:ContainerFrameItemButton_OnModifiedClick(frame, button)
    end
 end
 
-function BulkMail:SendMailFrame_CanSend()
+function mod:SendMailFrame_CanSend()
    if sendCache and next(sendCache) or GetSendMailItem() or SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) > 0 then
       SendMailMailButton:Enable()
       SendMailCODButton:Enable()
    end
-   self:ScheduleEvent('canSendRefresh', self.RefreshSendQueueGUI, 0.1, self)
+   self.canSendRefresh = self:ScheduleTimer("RefreshSendQueueGUI", 0.1)
 end
 
-function BulkMail:ContainerFrame_Update(...)
+function mod:ContainerFrame_Update(...)
    local frame = ...
    local bag = tonumber(strsub(frame:GetName(),15))
    if bag then bag = bag - 1 else return end
@@ -602,7 +685,7 @@ function BulkMail:ContainerFrame_Update(...)
 end
 
 -- This allows for ctrl-clicking name links to fill the To: field.  Contributed by bigzero.
-function BulkMail:SetItemRef(link, ...)
+function mod:SetItemRef(link, ...)
    if SendMailNameEditBox:IsVisible() and IsControlKeyDown() then 
       if strsub(link, 1, 6) == 'player' then 
 	 local name = strsplit(":", strsub(link, 8))
@@ -613,13 +696,13 @@ function BulkMail:SetItemRef(link, ...)
    end 
 end 
 
-function BulkMail:SendMailMailButton_OnClick(frame, a1)
+function mod:SendMailMailButton_OnClick(frame, a1)
    cacheLock = true
    sendDest = SendMailNameEditBox:GetText()
    local cod = SendMailCODButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney)
    if GetSendMailItem() or sendCache and next(sendCache) then
       organizeSendCache()
-      self:ScheduleRepeatingEvent('BM_SendLoop', self.Send, 0.1, self, cod)
+      self.sendLoopTimer = self:ScheduleRepeatingTimer("Send", 0.1, cod)
    else
       if SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) and SendMailSubjectEditBox:GetText() == '' and (not sendCache or not next(sendCache)) then
 	 SendMailSubjectEditBox:SetText(abacus:FormatMoneyFull(MoneyInputFrame_GetCopper(SendMailMoney)))
@@ -637,19 +720,19 @@ function BulkMail:SendMailMailButton_OnClick(frame, a1)
    end
 end
 
-function BulkMail:MailFrameTab1_OnClick(frame, a1)
+function mod:MailFrameTab1_OnClick(frame, a1)
    self:HideSendQueueGUI()
    return self.hooks[frame].OnClick(frame, a1)
 end
 
-function BulkMail:MailFrameTab2_OnClick(frame, a1)
+function mod:MailFrameTab2_OnClick(frame, a1)
    rulesCacheBuild()
    sendCacheBuild(SendMailNameEditBox:GetText())
    self:ShowSendQueueGUI()
    return self.hooks[frame].OnClick(frame, a1)
 end
 
-function BulkMail:SendMailNameEditBox_OnTextChanged(frame, a1)
+function mod:SendMailNameEditBox_OnTextChanged(frame, a1)
    sendCacheBuild(SendMailNameEditBox:GetText())
    sendDest = cacheLock and sendDest or SendMailNameEditBox:GetText()
    return self.hooks[frame].OnTextChanged(frame, a1)
@@ -658,14 +741,14 @@ end
 --[[----------------------------------------------------------------------------
 Public Functions
 ------------------------------------------------------------------------------]]
-function BulkMail:AddDestination(dest)
+function mod:AddDestination(dest)
    local _ = autoSendRules[dest]  -- trigger the table creation by accessing it
    destCache[dest] = true
    tinsert(reverseDestCache, dest)
    rulesAltered = true
 end
 
-function BulkMail:RemoveDestination(dest)
+function mod:RemoveDestination(dest)
    autoSendRules[dest] = nil
    destCache[dest] = nil
    for i=1, #reverseDestCache do
@@ -681,7 +764,7 @@ end
 -- LibPeriodicTable-3.1 set name.  If the first arg is neither of these, then
 -- it must be the destination; otherwise, defaultDestination is used.
 -- This is the function called by /bm autosend add.
-function BulkMail:AddAutoSendRule(...)
+function mod:AddAutoSendRule(...)
    local dest = select(1, ...)
    local start = 2
    if strmatch(dest, "^|[cC]") or pt:IsSetMulti(dest) ~= nil then
@@ -710,7 +793,7 @@ end
 -- destination (or the default if that field is blank), then supplies items and
 -- destinations from BulkMail's send queue and sends them.
 local suffix = SUFFIX_CHAR  -- for ensuring subject uniqueness to help BMI's "selected item" features
-function BulkMail:Send(cod)
+function mod:Send(cod)
    if StaticPopup_Visible('SEND_MONEY') then return end
    if GetSendMailItem(1) then
       SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination or '')
@@ -722,7 +805,9 @@ function BulkMail:Send(cod)
 	 self:Print(L["No default destination set."])
 	 self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
 	 cacheLock = false
-	 return self:CancelScheduledEvent('BM_SendLoop')
+	 self:CancelTimer(self.sendLoopTimer, true)
+	 self.sendLoopTimer = nil
+	 return 
       end
       return
    end
@@ -742,7 +827,8 @@ function BulkMail:Send(cod)
 	 MoneyInputFrame_SetCopper(SendMailMoney, cod)
       end
    else
-      self:CancelScheduledEvent('BM_SendLoop')
+      self:CancelTimer(self.sendLoopTimer, true)
+      self.sendLoopTimer = nil
       SendMailNameEditBox:SetText('')
       return sendCacheCleanup()
    end
@@ -752,7 +838,7 @@ end
 -- (or the default destination if no destination specified).
 -- This can be done whenever the mailbox is open, and is run when the user
 -- Ctrl-Shift-LeftClicks an item in his bag.
-function BulkMail:QuickSend(bag, slot)
+function mod:QuickSend(bag, slot)
    bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
    if bag and slot then
       PickupContainerItem(bag, slot)
@@ -808,7 +894,7 @@ local function _insertOrRemoveRule(ruletype, value)
       tinsert(curRuleSet[ruletype], value)
    end
    rulesAltered = true   
-   BulkMail:RefreshEditTooltipGUI()   
+   mod:RefreshEditTooltipGUI()   
 end
 
 local function _editCallbackMethod(args, val)
@@ -980,11 +1066,6 @@ local function _showmenu(parentFrame, args)
    menuFrame:SetFrameLevel(parentFrame:GetFrameLevel()+100)
 end
 
-
-local function color(text, color)
-   return fmt("|cff%s%s|r", color, text)
-end
-
 local function _plusminus(enabled)
    return fmt("|TInterface\\Buttons\\UI-%sButton-Up:18|t", enabled and "Minus" or "Plus")
 end
@@ -1007,7 +1088,7 @@ local function _toggleEditHeader(frame, dest)
    else
       shown[dest] = not shown[dest]
    end
-   BulkMail:RefreshEditTooltipGUI()   
+   mod:RefreshEditTooltipGUI()   
 end
 
 local function _listRulesQTip(tooltip, ruleset)
@@ -1022,7 +1103,7 @@ local function _listRulesQTip(tooltip, ruleset)
 			    menuFrame = menuFrame and menuFrame:Release()
 			    if IsAltKeyDown() then
 			       tremove(rules, k)
-			       BulkMail:RefreshEditTooltipGUI()
+			       mod:RefreshEditTooltipGUI()
 			       rulesAltered = true
 			    end
 			 end
@@ -1077,21 +1158,21 @@ local function _sendEditQueueClose()
    menuFrame = menuFrame and menuFrame:Release()
 end
 
-function BulkMail:RefreshEditTooltipGUI()
+function mod:RefreshEditTooltipGUI()
    if rulesAltered then
       sendCacheCleanup(true)
       rulesCacheBuild()
       if BulkMail.sendQueueTooltip then	 
 	 sendCacheBuild(SendMailNameEditBox:GetText())
-	 BulkMail:RefreshSendQueueGUI()
+	 mod:RefreshSendQueueGUI()
       end
    end
    if BulkMail.editQueueTooltip then
-      BulkMail:OpenEditTooltipGUI()
+      mod:OpenEditTooltipGUI()
    end
 end
 
-function BulkMail:OpenEditTooltipGUI()
+function mod:OpenEditTooltipGUI(parentframe)
    local tooltip = BulkMail.editQueueTooltip
    if not tooltip then
       tooltip = QTIP:Acquire("BulkMail3EditQueueTooltip")
@@ -1101,7 +1182,11 @@ function BulkMail:OpenEditTooltipGUI()
       tooltip:RegisterForDrag("LeftButton")
       tooltip:SetMovable(true)
       tooltip:SetColumnLayout(1, "LEFT")
-      tooltip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+      if parentframe then
+	 tooltip:SetPoint("TOPLEFT", parentframe, "BOTTOMLEFT", 0, 0)
+      else
+	 tooltip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+      end
       self.editQueueTooltip = tooltip
    else
       tooltip:Clear()      
@@ -1184,31 +1269,31 @@ end
 
 local function onDropClick()
    if GetSendMailItem() then
-      BulkMail:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
+      mod:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
    end
    if CursorHasItem() and getLockedContainerItem() then
       sendCacheAdd(getLockedContainerItem())
       PickupContainerItem(getLockedContainerItem())  -- clears the cursor
    end
-   BulkMail:RefreshSendQueueGUI()
+   mod:RefreshSendQueueGUI()
 end
 
 local function onSendClick()
-   if sendCache then BulkMail:SendMailMailButton_OnClick() end
+   if sendCache then mod:SendMailMailButton_OnClick() end
 end
 
-function BulkMail:HideSendQueueGUI()
+function mod:HideSendQueueGUI()
    _QTipClose(BulkMail.sendQueueTooltip)
    BulkMail.sendQueueTooltip = nil
 end
 
-function BulkMail:RefreshSendQueueGUI()
+function mod:RefreshSendQueueGUI()
    if BulkMail.sendQueueTooltip then
-      BulkMail:ShowSendQueueGUI()
+      mod:ShowSendQueueGUI()
    end
 end
 
-function BulkMail:ShowSendQueueGUI()
+function mod:ShowSendQueueGUI()
    local tooltip = BulkMail.sendQueueTooltip
    if not tooltip then
       tooltip = QTIP:Acquire("BulkMail3SendQueueTooltip")
@@ -1301,8 +1386,8 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
    button1 = L["Accept"], button2 = L["Cancel"],
    hasEditBox = 1, maxLetters = 20,
    OnAccept = function(self)
-		 BulkMail:AddDestination(_G[self:GetName().."EditBox"]:GetText())
-		 BulkMail:RefreshEditTooltipGUI()
+		 mod:AddDestination(_G[self:GetName().."EditBox"]:GetText())
+		 mod:RefreshEditTooltipGUI()
 	      end,
    OnShow = function(self)
 	       _G[self:GetName().."EditBox"]:SetFocus()
@@ -1314,8 +1399,8 @@ StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
 	       end 
 	    end,
    EditBoxOnEnterPressed = function(self)
-			      BulkMail:AddDestination(_G[self:GetName()]:GetText())
-			      BulkMail:RefreshEditTooltipGUI()
+			      mod:AddDestination(_G[self:GetName()]:GetText())
+			      mod:RefreshEditTooltipGUI()
 			      rulesAltered = true
 			      self:GetParent():Hide()
 			   end,
@@ -1329,8 +1414,8 @@ StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
    text = L["BulkMail - Confirm removal of destination"],
    button1 = L["Accept"], button2 = L["Cancel"],
    OnAccept = function(self)
-		 BulkMail:RemoveDestination(confirmedDestToRemove)
-		 BulkMail:RefreshEditTooltipGUI()
+		 mod:RemoveDestination(confirmedDestToRemove)
+		 mod:RefreshEditTooltipGUI()
 		 confirmedDestToRemove = nil
 		 rulesAltered = true
 	      end,
@@ -1339,3 +1424,28 @@ StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
 	    end,
    timeout = 0, exclusive = 1, hideOnEscape = 1,
 }
+
+
+-- Convenience function for registering options tables
+function mod:OptReg(optname, tbl, cmd)
+   local regtable
+   local configPanes = self.configPanes or new()
+   self.configPanes = configPanes
+   AC:RegisterOptionsTable(optname, tbl, cmd)
+   regtable = ACD:AddToBlizOptions(optname, L["BulkMail 3"])
+   configPanes[#configPanes+1] = optname
+   return regtable
+end
+
+function mod:OpenConfigMenu(parentframe)
+   -- create the menu   
+   local frame = LD:OpenAce3Menu(mod.opts)
+
+   -- Anchor the menu to the mouse
+   frame:SetPoint("TOPLEFT", parentframe, "BOTTOMLEFT", 0, 0)
+   frame:SetFrameLevel(parentframe:GetFrameLevel()+100)
+end
+
+function mod:ToggleConfigDialog()
+   InterfaceOptionsFrame_OpenToCategory(self._mainConfig)
+end
