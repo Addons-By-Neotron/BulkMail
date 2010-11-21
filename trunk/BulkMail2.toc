@@ -1,28 +1,21 @@
 ﻿## Interface: 40000
-## Title: BulkMail |cff7fff7f -Ace2-|r
+## Title: Bulk Mail 3 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
-## Version: 3.0.5
+## Version: 4.0.0 beta
 ## Author: NeoTron
 ## X-Credits: hyperactiveChipmunk, Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
 ## X-Thanks: hyperactiveChipmunk for making the addon and letting me (NeoTron) take it over
 ## X-Category: Mail
 ## X-eMail: neotron@gmail.com
 ## X-Website: http://wowace.com/wiki/BulkMail2
-## SavedVariables: BulkMail2DB
-## OptionalDeps: Ace2, TabletLib, DewdropLib, GratuityLib, AbacusLib, FuBar, FuBarPlugin-2.0, LibPeriodicTable-3.1
-## X-Embeds: Ace2, TabletLib, DewdropLib, GratuityLib, AbacusLib, FuBarPlugin-2.0, LibPeriodicTable-3.1
+## SavedVariables: BulkMail2DB, BulkMail3DB
+## OptionalDeps: Ace3, LibDropdown-1.0, LibQTip-1.0, LibGratuity-3.0, LibAbacus-3.0, LibDataBroker-1.1, LibPeriodicTable-3.1
 ## LoadManagers: SupplyAndDemand, ForkliftGnome, AddonLoader
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
 ## X-LoadOn-Slash: /bulkmail, /bm
 
 embeds.xml
-
-BulkMail-enUS.lua
-BulkMail-ruRU.lua
-BulkMail-deDE.lua
-BulkMail-frFR.lua
-BulkMail-zhTW.lua
+Locales.xml
 BulkMail.lua
-BulkMailFu.lua
