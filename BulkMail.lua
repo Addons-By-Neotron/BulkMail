@@ -2,7 +2,6 @@ BulkMail = LibStub("AceAddon-3.0"):NewAddon("BulkMail", "AceConsole-3.0", "AceEv
 
 local mod, self, BulkMail = BulkMail, BulkMail, BulkMail
 
-BulkMail.L = L
 local VERSION = " v4.0"
 local LibStub = LibStub
 
@@ -16,6 +15,8 @@ local AC       = LibStub("AceConfig-3.0")
 local ACD      = LibStub("AceConfigDialog-3.0")
 local DB       = LibStub("AceDB-3.0")
 local LDB      = LibStub("LibDataBroker-1.1", true)
+
+BulkMail.L = L
 
 local SUFFIX_CHAR = "\32"
 
@@ -1149,7 +1150,6 @@ local function _QTipClose(tooltip)
 end
 
 local function _sendEditQueueClose()
-   print('closing: ', BulkMail.editQueueTooltip)
    _QTipClose(BulkMail.editQueueTooltip)
    BulkMail.editQueueTooltip = nil
    menuFrame = menuFrame and menuFrame:Release()
