@@ -795,7 +795,7 @@ local suffix = SUFFIX_CHAR  -- for ensuring subject uniqueness to help BMI's "se
 function mod:Send(cod)
    if StaticPopup_Visible('SEND_MONEY') then return end
    if GetSendMailItem(1) then
-      SendMailNameEditBox:SetText(sendDest ~= '' and sendDest or rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination or '')
+      SendMailNameEditBox:SetText((sendDest ~= '' and sendDest or rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination) or '')
       if SendMailNameEditBox:GetText() ~= '' then
 	 if #suffix > 10 then suffix = SUFFIX_CHAR else suffix = suffix..SUFFIX_CHAR end
 	 _G.this = SendMailMailButton
@@ -829,6 +829,7 @@ function mod:Send(cod)
       self:CancelTimer(self.sendLoopTimer, true)
       self.sendLoopTimer = nil
       SendMailNameEditBox:SetText('')
+      sendDest = ''
       return sendCacheCleanup()
    end
 end
@@ -1159,10 +1160,8 @@ function mod:RefreshEditTooltipGUI()
    if rulesAltered then
       sendCacheCleanup(true)
       rulesCacheBuild()
-      if BulkMail.sendQueueTooltip then	 
-	 sendCacheBuild(SendMailNameEditBox:GetText())
-	 mod:RefreshSendQueueGUI()
-      end
+      sendCacheBuild(SendMailNameEditBox:GetText())
+      mod:RefreshSendQueueGUI()
    end
    if BulkMail.editQueueTooltip then
       mod:OpenEditTooltipGUI()
@@ -1192,7 +1191,6 @@ function mod:OpenEditTooltipGUI(parentframe)
    local y = tooltip:AddHeader();
    tooltip:SetCell(y, 1, color(L["AutoSend Rules"], "ffd200"), tooltip:GetHeaderFont(), "CENTER", 1)
    tooltip:AddLine(" ")
-
 
    for dest, rulesets in pairs(autoSendRules) do
       if destCache[dest] then
@@ -1231,6 +1229,7 @@ function mod:OpenEditTooltipGUI(parentframe)
    tooltip:SetFrameStrata("DIALOG")
    -- set max height to be 90% of the screen height
    tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.9)
+   tooltip:SetClampedToScreen(true)
    tooltip:Show()
 
 end
@@ -1369,8 +1368,9 @@ function mod:ShowSendQueueGUI()
    _addIndentedCell(tooltip, color(L["Close"], "ffd200"), 5, BulkMail.HideSendQueueGUI, BulkMail)
 
    tooltip:SetFrameStrata("FULLSCREEN")
-   -- set max height to be 90% of the screen height
-   tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.9)
+   -- set max height to be 80% of the screen height
+   tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.8)
+   tooltip:SetClampedToScreen(true)
    tooltip:Show()   
 end
 
