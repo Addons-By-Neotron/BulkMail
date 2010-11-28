@@ -568,7 +568,7 @@ function mod:OnInitialize()
       self.ldb =
 	 LDB:NewDataObject("BulkMail",
 			   {
-			      type =  "launcher", 
+			      type =  "data source", 
 			      label = L["Bulk Mail"]..VERSION,
 			      icon = [[Interface\Addons\BulkMail2\icon]],
 			      tooltiptext = color(L["Bulk Mail"]..VERSION.."\n\n", "ffff00")..color(L["Hint: Click to show the AutoSend Rules editor."].."\n"..
