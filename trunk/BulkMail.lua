@@ -318,7 +318,7 @@ local function sendCacheAdd(bag, slot, squelch)
 	 if not squelch then mod:RefreshSendQueueGUI() end
 	 SendMailFrame_CanSend()
       elseif not squelch then
-	 mod:Print(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot))
+	 mod:Print(fmt(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot)))
       end
    end
    updateSendCost()
@@ -778,11 +778,11 @@ function mod:AddAutoSendRule(...)
       if itemID then  -- is an item link
 	 tinsert(autoSendRules[dest].include.items, itemID)
 	 mod:RefreshEditTooltipGUI()	 
-	 self:Print("%s - %s", select(i, ...), dest)
+	 self:Print(fmt("%s - %s", select(i, ...), dest))
       elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT31 set
 	 tinsert(autoSendRules[dest].include.pt31Sets, select(i, ...))
 	 mod:RefreshEditTooltipGUI()	 
-	 self:Print("%s - %s", select(i, ...), dest)
+	 self:Print(fmt("%s - %s", select(i, ...), dest))
       end
    end
    rulesAltered = true
