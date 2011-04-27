@@ -459,8 +459,6 @@ function mod:OnInitialize()
    if not BulkMail3DB then
       _convertBulkMail2DB()
    end
-   mod:Print("You're running a beta version of BulkMail 4.0 with Ace3 version.")
-   mod:Print("Please make sure to report any problems in our ticket system.")
    _convertAce2ToAce3Realm = nil
    _convertBulkMail2DB = nil
 
