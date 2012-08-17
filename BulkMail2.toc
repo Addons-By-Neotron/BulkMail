@@ -1,4 +1,4 @@
-﻿## Interface: 40300
+﻿## Interface: 50001
 ## Title: Bulk Mail 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
@@ -15,6 +15,10 @@
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
 ## X-LoadOn-Slash: /bulkmail, /bm
+## X-Curse-Packaged-Version: 4.0.3-2
+## X-Curse-Project-Name: Bulk Mail
+## X-Curse-Project-ID: bulkmail
+## X-Curse-Repository-ID: wow/bulkmail/mainline
 
 embeds.xml
 Locales.xml
