@@ -1,62 +1,8 @@
 local debug = false
---[===[@debug@
+--@debug@
 debug = true
---@end-debug@]===]
+--@end-debug@
 
 local L = LibStub("AceLocale-3.0"):NewLocale("BulkMail", "enUS", true, debug)
 
-L["Accept"] = true
-L["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."] = true
-L["Add Item Rule"] = true
-L["Add rule"] = true
-L["Attach as many items as possible per mail."] = true
-L["Attach multiple items"] = true
-L["Auto Send Commands"] = true
-L["AutoSend Options"] = true
-L["AutoSend Rules"] = true
-L["Bulk Mail"] = true
-L["BulkMail - Confirm removal of destination"] = true
-L["BulkMail - New AutoSend Destination"] = true
-L["Cancel"] = true
-L["Cannot determine the item clicked."] = true
-L["Clear"] = true
-L["Clear all rules for this realm."] = true
-L["Clear Realm rules"] = true
-L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."] = true
-L["Close"] = true
-L["Default destination"] = true
-L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"] = true
-L["Disable AutoSend queue auto-filling for this character."] = true
-L["Drop items here for Sending"] = true
-L["Edit AutoSend definitions."] = true
-L["Edit Destinations"] = true
-L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."] = true
-L["Exclude"] = true
-L["Global Exclude"] = true
-L["Hint: "] = true
-L["Hint: Click to show the AutoSend Rules editor."] = true
-L["Include"] = true
-L["Item cannot be mailed: %s."] = true
-L["ItemID(s)"] = true
-L["Items from Bags"] = true
-L["Items to be sent (Alt-Click to add/remove):"] = true
-L["Item Type"] = true
-L["Mailable items in your bags."] = true
-L["Middle click to open the config panel."] = true
-L["Missing"] = true
-L["New Destination"] = true
-L["No default destination set."] = true
-L["No items selected"] = true
-L["None"] = true
-L["Periodic Table Set"] = true
-L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."] = true
-L["Remove all rules corresponding to a particular destination."] = true
-L["Remove Destination"] = true
-L["Right click to open the config menu."] = true
-L["Send"] = true
-L["Set the default recipient of your AutoSend rules"] = true
-L["Sink"] = true
-L["Usage: "] = true
-L["Usage: <itemID> [itemID2, ...]"] = true
-L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."] = true
-
+--@localization(locale="enUS", format="lua_additive_table", same-key-is-true=true, handle-subnamespaces="concat")@
