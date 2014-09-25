@@ -310,7 +310,7 @@ local function sendCacheAdd(bag, slot, squelch)
    end
    if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
       gratuity:SetBagItem(bag, slot)
-      if not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true) then
+      if not gratuity:MultiFind(2, 5, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 5, nil, true, true) then
 	 sendCache[bag] = sendCache[bag] or new()
 	 sendCache[bag][slot] = true;
 	 numItems = numItems + 1
@@ -963,8 +963,8 @@ local function updateInventoryConfigTable()
       if itemID and not dupeCheck[itemID] then
 	 dupeCheck[itemID] = true
 	 gratuity:SetBagItem(bag, slot)
-	 if (not gratuity:MultiFind(2, 4, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
-	  or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 4, nil, true, true)) then
+	 if (not gratuity:MultiFind(2, 5, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+	  or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 5, nil, true, true)) then
 	    local link = select(2, GetItemInfo(itemID))
 	    local texture = select(10, GetItemInfo(itemID))
 	    InventoryConfigTable.args[tostring(itemID)] = newHash(
