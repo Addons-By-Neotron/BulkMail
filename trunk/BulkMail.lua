@@ -2,7 +2,7 @@ BulkMail = LibStub("AceAddon-3.0"):NewAddon("BulkMail", "AceConsole-3.0", "AceEv
 
 local mod, self, BulkMail = BulkMail, BulkMail, BulkMail
 
-local VERSION = " v4.0"
+local VERSION = " v7.0.0"
 local LibStub = LibStub
 
 local L        = LibStub("AceLocale-3.0"):GetLocale("BulkMail", false)
@@ -274,7 +274,7 @@ end
 local function updateSendCost()
    if sendCache and next(sendCache) then
       local numMails = numItems
-      if GetSendMailItem() then
+      if GetSendMailItem(1) then
 	 numMails = numMails + 1
       end
       return MoneyFrame_Update('SendMailCostMoneyFrame', GetSendMailPrice() * numMails)
@@ -356,6 +356,7 @@ end
 -- clearing the items the user has added manually this session).
 
 local function sendCacheCleanup(autoOnly)
+   print("Send cache cleanup")
    if sendCache then
       for bag, slots in pairs(sendCache) do
 	 for slot in pairs(slots) do
@@ -496,8 +497,21 @@ function mod:OnInitialize()
    globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
    auctionItemClasses = {}  -- local itemType value association table
-
-   for i, itype in ipairs({GetAuctionItemClasses()}) do
+   local CLASSES = {
+      AUCTION_CATEGORY_WEAPONS,
+      AUCTION_CATEGORY_ARMOR,
+      AUCTION_CATEGORY_CONTAINERS,
+      AUCTION_CATEGORY_GEMS,
+      AUCTION_CATEGORY_ITEM_ENHANCEMENT,
+      AUCTION_CATEGORY_CONSUMABLES,
+      AUCTION_CATEGORY_GLYPHS,
+      AUCTION_CATEGORY_TRADE_GOODS,
+      AUCTION_CATEGORY_RECIPES,
+      AUCTION_CATEGORY_BATTLE_PETS,
+      AUCTION_CATEGORY_QUEST_ITEMS,
+      AUCTION_CATEGORY_MISCELLANEOUS
+   }
+   for i, itype in ipairs(CLASSES) do
       auctionItemClasses[itype] = {GetAuctionItemSubClasses(i)}
    end
 
@@ -663,7 +677,7 @@ function mod:ContainerFrameItemButton_OnModifiedClick(frame, button)
 end
 
 function mod:SendMailFrame_CanSend()
-   if sendCache and next(sendCache) or GetSendMailItem() or SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) > 0 then
+   if sendCache and next(sendCache) or GetSendMailItem(1) or SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) > 0 then
       SendMailMailButton:Enable()
       SendMailCODButton:Enable()
    end
@@ -699,7 +713,7 @@ function mod:SendMailMailButton_OnClick(frame, a1)
    cacheLock = true
    sendDest = SendMailNameEditBox:GetText()
    local cod = SendMailCODButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney)
-   if GetSendMailItem() or sendCache and next(sendCache) then
+   if GetSendMailItem(1) or sendCache and next(sendCache) then
       organizeSendCache()
       self.sendLoopTimer = self:ScheduleRepeatingTimer("Send", 0.1, cod)
    else
@@ -1262,7 +1276,7 @@ local function onSendQueueItemSelect(bag, slot)
 end
 
 local function onDropClick()
-   if GetSendMailItem() then
+   if GetSendMailItem(1) then
       mod:Print(L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."])
    end
    if CursorHasItem() and getLockedContainerItem() then
