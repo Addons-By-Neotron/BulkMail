@@ -1,4 +1,4 @@
-﻿## Interface: 70000
+﻿## Interface: 80200
 ## Title: Bulk Mail 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
