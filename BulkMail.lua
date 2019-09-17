@@ -13,6 +13,7 @@ local QTIP     = LibStub("LibQTip-1.0")
 local LD       = LibStub("LibDropdown-1.0")
 local AC       = LibStub("AceConfig-3.0")
 local ACD      = LibStub("AceConfigDialog-3.0")
+local ACONS    = LibStub("AceConsole-3.0")
 local DB       = LibStub("AceDB-3.0")
 local LDB      = LibStub("LibDataBroker-1.1", true)
 
@@ -224,7 +225,7 @@ local function rulesCacheBuild()
 
       for _, itemTypeTable in ipairs(rules.exclude.itemTypes) do
 	 local rtype, rsubtype = itemTypeTable.type, itemTypeTable.subtype
-	 if rsubtype ~= rtype and rulesCache[dest][rtype] then
+	 if rsubtype and rulesCache[dest][rtype] then
 	    rulesCache[dest][rtype][rsubtype] = nil
 	 else
 	    rulesCache[dest][rtype] = nil
@@ -253,16 +254,22 @@ local function rulesCacheDest(item)
       if pt:ItemInSet(itemID, xset) == true then return end
    end
 
-   local itype, isubtype = select(6, GetItemInfo(itemID))
+
+   local itype, isubtype = select(6, GetItemInfo(itemID)) -- old string based lookup
+   local iclass, isubclass = select(12, GetItemInfo(itemID)) -- new class id based lookup
    for dest, rules in pairs(rulesCache) do
       local canddest
-      if dest ~= UnitName('player') and (rules[itemID] or rules[itype] and rules[itype][isubtype]) then canddest = dest end
+      if dest ~= UnitName('player') and (rules[itemID] or 
+					    (rules[itype] and rules[itype][isubtype]) or
+					 (rules[iclass] and rules[iclass][isubclass])) then
+	 canddest = dest 
+      end
       if canddest then
 	 local xrules = autoSendRules[canddest].exclude
 	 for _, xID in ipairs(xrules.items) do if itemID == xID then canddest = nil end end
-	 for _, xset in ipairs(xrules.pt31Sets) do
-	    if pt:ItemInSet(itemID, xset) == true then canddest = nil end
-	 end
+	    for _, xset in ipairs(xrules.pt31Sets) do
+	       if pt:ItemInSet(itemID, xset) == true then canddest = nil end
+	    end
       end
       rdest = canddest or rdest
    end
@@ -356,7 +363,6 @@ end
 -- clearing the items the user has added manually this session).
 
 local function sendCacheCleanup(autoOnly)
-   print("Send cache cleanup")
    if sendCache then
       for bag, slots in pairs(sendCache) do
 	 for slot in pairs(slots) do
@@ -495,24 +501,21 @@ function mod:OnInitialize()
    end
 
    globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
+   local obsoletes = newHash(
+      LE_ITEM_CLASS_REAGENT, true,
+      LE_ITEM_CLASS_PROJECTILE, true,
+      LE_ITEM_CLASS_QUIVER, true,
+      LE_ITEM_CLASS_QUESTITEM, true, -- can't send quest items
+      LE_ITEM_CLASS_KEY, true,
+      10, true,  -- Money
+      14,  true -- Permanent
+   )
 
    auctionItemClasses = {}  -- local itemType value association table
-   local CLASSES = {
-      AUCTION_CATEGORY_WEAPONS,
-      AUCTION_CATEGORY_ARMOR,
-      AUCTION_CATEGORY_CONTAINERS,
-      AUCTION_CATEGORY_GEMS,
-      AUCTION_CATEGORY_ITEM_ENHANCEMENT,
-      AUCTION_CATEGORY_CONSUMABLES,
-      AUCTION_CATEGORY_GLYPHS,
-      AUCTION_CATEGORY_TRADE_GOODS,
-      AUCTION_CATEGORY_RECIPES,
-      AUCTION_CATEGORY_BATTLE_PETS,
-      AUCTION_CATEGORY_QUEST_ITEMS,
-      AUCTION_CATEGORY_MISCELLANEOUS
-   }
-   for i, itype in ipairs(CLASSES) do
-      auctionItemClasses[itype] = {GetAuctionItemSubClasses(i)}
+   for i = 0, NUM_LE_ITEM_CLASSS-1 do
+      if not obsoletes[i] then
+	 auctionItemClasses[i] = {GetAuctionItemSubClasses(i)}
+      end
    end
 
    numItems = 0
@@ -520,12 +523,13 @@ function mod:OnInitialize()
 
    self.opts = {
       type = 'group',
+      handler = mod,
       args = {
 	 defaultdest = {
 	    name = L["Default destination"], type = 'input',
 	    desc = L["Set the default recipient of your AutoSend rules"],
 	    get = function() return self.db.char.defaultDestination end,
-	    set = function(dest) self.db.char.defaultDestination = dest end,
+	    set = function(args, dest) self.db.char.defaultDestination = dest end,
 	 },
 	 autosend = {
 	    name = L["Auto Send Commands"], type = 'group', 
@@ -537,25 +541,16 @@ function mod:OnInitialize()
 		  func = function() mod:OpenEditTooltipGUI() end,
 		  order = 30, 
 	       },
-	       add = {
-		  name = L["Add Item Rule"], type = 'input', 
-		  desc = L["Add an item rule by itemlink or LibPeriodicTable-3.1 set manually."].. "\n"..L["Usage: "]..
-		     L["[destination] <itemlink|Periodic.Table.Set> [itemlink2|P.T.S.2 itemlink3|P.T.S.3 ...]"],
-		  set = 'AddAutoSendRule', get = false,
-		  validate = function(args, val) return (self.db.char.defaultDestination or (not strmatch(val, "^|[cC]") and not pt:IsSetMulti(val) ~= nil) and
-						      L["Please supply a destination for the item(s), or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])end,
-		  order = 20, 
-	       },
-	       rmdest = {
-		  name = L["Remove Destination"], type = 'input',
-		  desc = L["Remove all rules corresponding to a particular destination."],
-		  set = 'RemoveDestination', get = false,
-		  order = 10, 
-	       },
 	       clear = {
 		  name = L["Clear Realm rules"], type = 'execute',
 		  desc = L["Clear all rules for this realm."],
-		  func = function() self.db.factionrealm = new() for i in pairs(autoSendRules) do autoSendRules[i] = nil end mod:RefreshEditTooltipGUI() end, confirm = true,
+		  func = function() 
+		     self.db.factionrealm = new() 
+		     for i in pairs(autoSendRules) do 
+			autoSendRules[i] = nil 
+		     end
+		     mod:RefreshEditTooltipGUI() end, 
+		  confirm = true,
 		  order = 40
 	       },
 	    },
@@ -767,37 +762,10 @@ function mod:RemoveDestination(dest)
    for i=1, #reverseDestCache do
       if reverseDestCache[i] == dest then
 	 tremove(reverseDestCache, i)
+	 rulesAltered = true
 	 break
       end
    end
-   rulesAltered = true
-end
-
--- Simple function for adding include rules manually via itemlink or
--- LibPeriodicTable-3.1 set name.  If the first arg is neither of these, then
--- it must be the destination; otherwise, defaultDestination is used.
--- This is the function called by /bm autosend add.
-function mod:AddAutoSendRule(...)
-   local dest = select(1, ...)
-   local start = 2
-   if strmatch(dest, "^|[cC]") or pt:IsSetMulti(dest) ~= nil then
-      dest = self.db.char.defaultDestination  -- first arg is an item or PT set, not a name, so use default (validation that default exists is handled by AceOptions)
-      start = 1
-   end
-   self:AddDestination(dest)
-   for i = start, select('#', ...) do
-      local itemID = tonumber(strmatch(select(i, ...), "item:(%d+)"))
-      if itemID then  -- is an item link
-	 tinsert(autoSendRules[dest].include.items, itemID)
-	 mod:RefreshEditTooltipGUI()	 
-	 self:Print(fmt("%s - %s", select(i, ...), dest))
-      elseif pt:IsSetMulti(select(i, ...)) ~= nil then  -- is a PT31 set
-	 tinsert(autoSendRules[dest].include.pt31Sets, select(i, ...))
-	 mod:RefreshEditTooltipGUI()	 
-	 self:Print(fmt("%s - %s", select(i, ...), dest))
-      end
-   end
-   rulesAltered = true
 end
 
 -- Sends the current item in the SendMailItemButton to the currently-specified
@@ -1031,18 +999,20 @@ local function createBlizzardCategoryConfigTable(force)
    )
 
    for itype, subtypes in pairs(auctionItemClasses) do
+      local iname = GetItemClassInfo(itype)
       if #subtypes == 0 then
-	 ItemTypesConfigTable.args[itype] = newHash('type', "toggle", 'name', itype)
+	 ItemTypesConfigTable.args[itype] = newHash('type', "toggle", 'name', iname)
       else
 	 local supertype = new()
 	 ItemTypesConfigTable.args[itype] = newHash(
 	    'type', "group",
-	    'name', itype, 
+	    'name', iname, 
 	    'args', supertype
 	 )
 
 	 for _, isubtype in ipairs(subtypes) do
-	    supertype[isubtype] = newHash('type', "toggle", 'name', isubtype)
+	    local name = GetItemSubClassInfo(itype, isubtype)
+	    supertype[isubtype] = newHash('type', "toggle", 'name', name)
 	 end
       end
    end
@@ -1103,6 +1073,19 @@ local function _toggleEditHeader(frame, dest)
    mod:RefreshEditTooltipGUI()   
 end
 
+local function _namesForItemRule(rule) 
+   if type(rule) == "string" then 
+      return rule.type, rule.subtype
+   else
+      local subtype
+      if rule.subtype ~= nil then 
+	 subtype = GetItemSubClassInfo(rule.type, rule.subtype)
+      end
+      return GetItemClassInfo(rule.type), subtype
+   end
+end
+
+
 local function _listRulesQTip(tooltip, ruleset)
    local x, y
    local addedRule
@@ -1124,10 +1107,11 @@ local function _listRulesQTip(tooltip, ruleset)
 	       text = select(2, GetItemInfo(rule))
 	       checkIcon = select(10, GetItemInfo(rule))
 	    elseif ruletype == 'itemTypes' then
-	       if rule.subtype and rule.subtype ~= rule.type then
-		  text = fmt("|cfffadfa8Item Type: %s - %s|r", rule.type, rule.subtype)
+	       local name, subtype = _namesForItemRule(rule)
+	       if subtype ~= nil then
+		  text = fmt("|cfffadfa8Item Type: %s - %s|r", name, subtype)
 	       else
-		  text = fmt("|cfffadfa8Item Type: %s|r", rule.type)
+		  text = fmt("|cfffadfa8Item Type: %s|r", name)
 	       end
 	    elseif ruletype == 'pt31Sets' then
 	       text = fmt("|cffc8c8ffPT31 Set: %s|r", rule)
@@ -1270,6 +1254,7 @@ local function onSendQueueItemSelect(bag, slot)
       elseif IsControlKeyDown() and not IsShiftKeyDown() then
 	 DressUpItemLink(GetContainerItemLink(bag, slot))
       else
+      mod:Print(bag, slot, GetContainerItemLink(bag, slot))
 	 SetItemRef(strmatch(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)"), GetContainerItemLink(bag, slot), arg1)
       end
    end
