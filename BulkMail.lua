@@ -1246,16 +1246,17 @@ end
 
 local function onSendQueueItemSelect(bag, slot)
    if bag and slot then
+      local itemLink = GetContainerItemLink(bag, slot)
       local editBox = ChatEdit_GetActiveWindow()
       if IsAltKeyDown() then
 	 sendCacheToggle(bag, slot)
       elseif IsShiftKeyDown() and editBox and editBox:IsVisible() then
-	 editBox:Insert(GetContainerItemLink(bag, slot))
+	 editBox:Insert(itemLink)
       elseif IsControlKeyDown() and not IsShiftKeyDown() then
-	 DressUpItemLink(GetContainerItemLink(bag, slot))
+	 DressUpItemLink(itemLink)
       else
-      mod:Print(bag, slot, GetContainerItemLink(bag, slot))
-	 SetItemRef(strmatch(GetContainerItemLink(bag, slot), "(item:%d+:%d+:%d+:%d+)"), GetContainerItemLink(bag, slot), arg1)
+	 local itemString = string.match(itemLink, "item[%-?%d:]+")
+	 SetItemRef(itemString, itemLink, arg1)
       end
    end
 end
