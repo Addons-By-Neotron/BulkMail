@@ -501,15 +501,33 @@ function mod:OnInitialize()
    end
 
    globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
-   local obsoletes = newHash(
-      LE_ITEM_CLASS_REAGENT, true,
-      LE_ITEM_CLASS_PROJECTILE, true,
-      LE_ITEM_CLASS_QUIVER, true,
-      LE_ITEM_CLASS_QUESTITEM, true, -- can't send quest items
-      LE_ITEM_CLASS_KEY, true,
-      10, true,  -- Money
-      14,  true -- Permanent
-   )
+
+
+   local obsoletes
+   if GetItemClassInfo(LE_ITEM_CLASS_BATTLEPET) then 
+      -- retail
+      obsoletes = newHash(
+	 LE_ITEM_CLASS_REAGENT, true,
+	 LE_ITEM_CLASS_PROJECTILE, true,
+	 LE_ITEM_CLASS_QUIVER, true,
+	 LE_ITEM_CLASS_QUESTITEM, true, -- can't send quest items
+	 LE_ITEM_CLASS_KEY, true,
+	 10, true,  -- Money
+	 14,  true -- Permanent
+      )
+   else
+      -- classic 
+      obsoletes = newHash(
+	 LE_ITEM_CLASS_GEM, true,
+	 LE_ITEM_CLASS_GLYPH, true,
+	 LE_ITEM_CLASS_ITEM_ENHANCEMENT, true,
+	 LE_ITEM_CLASS_WOW_TOKEN, true,
+	 LE_ITEM_CLASS_BATTLEPET, true,
+	 LE_ITEM_CLASS_QUESTITEM, true, -- can't send quest items
+	 10, true,  -- Money
+	 14,  true -- Permanent
+      )
+   end
 
    auctionItemClasses = {}  -- local itemType value association table
    for i = 0, NUM_LE_ITEM_CLASSS-1 do
@@ -517,7 +535,6 @@ function mod:OnInitialize()
 	 auctionItemClasses[i] = {GetAuctionItemSubClasses(i)}
       end
    end
-
    numItems = 0
    rulesAltered = true
 
