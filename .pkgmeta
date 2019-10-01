@@ -22,4 +22,4 @@ externals:
         Libs/LibPeriodicTable-3.1-TradeskillResultMats: https://repos.wowace.com/wow/libperiodictable-3-1/trunk/LibPeriodicTable-3.1-TradeskillResultMats
         Libs/LibPeriodicTable-3.1: https://repos.wowace.com/wow/libperiodictable-3-1/trunk/LibPeriodicTable-3.1
         Libs/LibStub: https://repos.wowace.com/wow/libstub/trunk
-        Libs/LibDataBroker-1.0: https://github.com/tekkub/libdatabroker-1-1.git
+        Libs/LibDataBroker-1.1: https://github.com/tekkub/libdatabroker-1-1.git
