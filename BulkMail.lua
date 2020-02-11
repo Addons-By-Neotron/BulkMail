@@ -20,6 +20,9 @@ local LDB      = LibStub("LibDataBroker-1.1", true)
 BulkMail.L = L
 
 local SUFFIX_CHAR = "\32"
+function CompatGetAuctionItemSubClasses()
+    return {GetAuctionItemSubClasses}
+end
 
 local _G = _G
 local strmatch = string.match
@@ -57,7 +60,7 @@ local ATTACHMENTS_MAX_SEND = ATTACHMENTS_MAX_SEND
 local DressUpItemLink = DressUpItemLink
 local GetAddOnInfo = GetAddOnInfo
 local GetAddOnMetadata = GetAddOnMetadata
-local GetAuctionItemSubClasses = GetAuctionItemSubClasses or C_AuctionHouse.GetAuctionItemSubClasses
+local GetAuctionItemSubClasses = C_AuctionHouse.GetAuctionItemSubClasses or CompatGetAuctionItemSubClasses
 local GetNumAddOns = GetNumAddOns
 local LoadAddOn = LoadAddOn
 local MAX_CONTAINER_ITEMS = MAX_CONTAINER_ITEMS
@@ -531,7 +534,7 @@ function mod:OnInitialize()
    auctionItemClasses = {}  -- local itemType value association table
    for i = 0, NUM_LE_ITEM_CLASSS-1 do
       if not obsoletes[i] then
-	 auctionItemClasses[i] = {GetAuctionItemSubClasses(i)}
+	 auctionItemClasses[i] = GetAuctionItemSubClasses(i)
       end
    end
    numItems = 0
