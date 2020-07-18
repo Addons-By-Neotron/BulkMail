@@ -178,6 +178,7 @@ local function iter()
         iterbag, iterslot = b + 1, 1
     end
 end
+
 local function bagIter()
     iterbag, iterslot = 0, 1
     return iter
@@ -283,11 +284,14 @@ end
 -- price of all the items that BulkMail will send.
 local function updateSendCost()
     if sendCache and next(sendCache) then
-        local numMails = numItems
-        if GetSendMailItem(1) then
-            numMails = numMails + 1
+        local basePrice = 0
+        for slot = 1,8 do
+            if GetSendMailItem(slot) ~= nil then
+                basePrice = GetSendMailPrice()
+                break
+            end
         end
-        return MoneyFrame_Update('SendMailCostMoneyFrame', GetSendMailPrice() * numMails)
+        return MoneyFrame_Update('SendMailCostMoneyFrame', basePrice + 30 * numItems)
     else
         return MoneyFrame_Update('SendMailCostMoneyFrame', GetSendMailPrice())
     end
@@ -320,7 +324,7 @@ local function sendCacheAdd(bag, slot, squelch)
     end
     if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
         gratuity:SetBagItem(bag, slot)
-        if not gratuity:MultiFind(2, 5, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 5, nil, true, true) then
+        if not gratuity:MultiFind(2, 7, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, nil, true, true) then
             sendCache[bag] = sendCache[bag] or new()
             sendCache[bag][slot] = true;
             numItems = numItems + 1
@@ -331,11 +335,13 @@ local function sendCacheAdd(bag, slot, squelch)
             mod:Print(fmt(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot)))
         end
     end
-    updateSendCost()
+    if not squelch then
+        updateSendCost()
+    end
 end
 
 -- Remove a container slot from BulkMail's send queue.
-local function sendCacheRemove(bag, slot)
+local function sendCacheRemove(bag, slot, isBulk)
     bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
     if sendCache and sendCache[bag] then
         if sendCache[bag][slot] then
@@ -345,9 +351,11 @@ local function sendCacheRemove(bag, slot)
         end
         if not next(sendCache[bag]) then sendCache[bag] = del(sendCache[bag]) end
     end
-    mod:RefreshSendQueueGUI()
-    updateSendCost()
-    SendMailFrame_CanSend()
+    if not isBulk then
+        mod:RefreshSendQueueGUI()
+        updateSendCost()
+        SendMailFrame_CanSend()
+    end
 end
 
 -- Toggle a container slot's presence in BulkMail's send queue.
@@ -371,13 +379,15 @@ local function sendCacheCleanup(autoOnly)
             for slot in pairs(slots) do
                 local item = GetContainerItemLink(bag, slot)
                 if not autoOnly or rulesCacheDest(item) then
-                    sendCacheRemove(bag, slot)
+                    sendCacheRemove(bag, slot, true)
                 end
             end
         end
     end
     cacheLock = false
     mod:RefreshSendQueueGUI()
+    updateSendCost()
+    SendMailFrame_CanSend()
 end
 
 -- Populate BulkMail's send queue with container slots holding items following
@@ -390,6 +400,7 @@ local function sendCacheBuild(dest)
             -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
             return mod:RefreshSendQueueGUI()
         end
+
         for bag, slot, item in bagIter() do
             local target = rulesCacheDest(item)
             if target then
@@ -756,12 +767,13 @@ function mod:MailFrameTab2_OnClick(frame, a1)
     rulesCacheBuild()
     sendCacheBuild(SendMailNameEditBox:GetText())
     self:ShowSendQueueGUI()
+    self:ScheduleTimer(updateSendCost, 0.01)
     return self.hooks[frame].OnClick(frame, a1)
 end
 
 function mod:SendMailNameEditBox_OnTextChanged(frame, a1)
-    sendCacheBuild(SendMailNameEditBox:GetText())
     sendDest = cacheLock and sendDest or SendMailNameEditBox:GetText()
+    sendCacheBuild(SendMailNameEditBox:GetText())
     return self.hooks[frame].OnTextChanged(frame, a1)
 end
 
@@ -1304,6 +1316,7 @@ function mod:RefreshSendQueueGUI()
     if BulkMail.sendQueueTooltip then
         mod:ShowSendQueueGUI()
     end
+    updateSendCost()
 end
 
 function mod:ShowSendQueueGUI()
@@ -1348,7 +1361,7 @@ function mod:ShowSendQueueGUI()
                         if not recipient or strlen(recipient) == 0 then
                             recipient = color(L["Missing"], "ff0000")
                         else
-                            recipient = color(recipient, "ffd200")
+                            recipient = color(recipient, "80ff80")
                         end
                     else
                         recipient = color(sendDest, "00d2ff")
