@@ -13,7 +13,7 @@ externals:
         Libs/CallbackHandler-1.0: https://repos.wowace.com/wow/ace3/trunk/CallbackHandler-1.0
         Libs/LibAbacus-3.0: https://repos.wowace.com/wow/libabacus-3-0/trunk
         Libs/LibDropdown-1.0: https://github.com/neotron/WoW-LibDropDown.git
-        Libs/LibQTip-1.0: https://repos.wowace.com/wow/libqtip-1-0/trunk
+        Libs/LibQTip-1.0: https://repos.wowace.com/wow/libqtip-1-0
         Libs/LibGratuity-3.0: https://repos.wowace.com/wow/libgratuity-3-0/trunk
         Libs/LibPeriodicTable-3.1-Consumable: https://repos.wowace.com/wow/libperiodictable-3-1/trunk/LibPeriodicTable-3.1-Consumable
         Libs/LibPeriodicTable-3.1-Misc: https://repos.wowace.com/wow/libperiodictable-3-1/trunk/LibPeriodicTable-3.1-Misc
