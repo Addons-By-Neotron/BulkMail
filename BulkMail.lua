@@ -323,6 +323,7 @@ local function sendCacheAdd(bag, slot, squelch)
     if type(slot) ~= 'number' then
         bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
     end
+    local didAdd = false
     if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
         gratuity:SetBagItem(bag, slot)
         if not gratuity:MultiFind(2, 7, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, nil, true, true) then
@@ -332,13 +333,15 @@ local function sendCacheAdd(bag, slot, squelch)
             shadeBagSlot(bag,slot,true)
             if not squelch then mod:RefreshSendQueueGUI() end
             SendMailFrame_CanSend()
+            didAdd = true
         elseif not squelch then
             mod:Print(fmt(L["Item cannot be mailed: %s."], GetContainerItemLink(bag, slot)))
         end
     end
-    if not squelch then
+    if not squelch and didAdd then
         updateSendCost()
     end
+    return didAdd
 end
 
 -- Remove a container slot from BulkMail's send queue.
@@ -357,6 +360,26 @@ local function sendCacheRemove(bag, slot, isBulk)
         updateSendCost()
         SendMailFrame_CanSend()
     end
+end
+
+local function bulkToggleBagItem(bag, slot)
+    local _,_,_,_,_,_, itemLink = GetContainerItemInfo(bag, slot)
+    if not itemLink then return end
+    local itemId = tonumber(strmatch(itemLink, "item:(%d+)"))
+    local shouldRemove =  sendCache and sendCache[bag] and sendCache[bag][slot]
+    mod:Print(fmt(L["Attempting to %s all %s."], shouldRemove and L["remove"] or L["add"], itemLink))
+    for addlBag, addlSlot, item in bagIter() do
+        if tonumber(strmatch(item, "item:(%d+)")) == itemId then
+            if shouldRemove then
+                sendCacheRemove(addlBag, addlSlot, true)
+            elseif not sendCacheAdd(addlBag, addlSlot, true) then
+                mod:Print(fmt(L["Item cannot be mailed: %s."], GetContainerItemLink(addlBag, addlSlot)))
+            end
+        end
+    end
+    mod:RefreshSendQueueGUI()
+    updateSendCost()
+    SendMailFrame_CanSend()
 end
 
 -- Toggle a container slot's presence in BulkMail's send queue.
@@ -696,6 +719,8 @@ Hooks
 function mod:ContainerFrameItemButton_OnModifiedClick(frame, button)
     if IsControlKeyDown() and IsShiftKeyDown() then
         self:QuickSend(frame:GetParent():GetID(), frame:GetID())
+    elseif IsAltKeyDown() and IsShiftKeyDown() then
+        bulkToggleBagItem(frame:GetParent():GetID(), frame:GetID())
     elseif IsAltKeyDown() then
         sendCacheToggle(frame:GetParent():GetID(), frame:GetID())
     elseif not IsShiftKeyDown() then
@@ -1337,7 +1362,8 @@ function mod:ShowSendQueueGUI()
     end
 
     local y = tooltip:AddHeader();
-    tooltip:SetCell(y, 1, L["Items to be sent (Alt-Click to add/remove):"], tooltip:GetFont(), "CENTER", 2)
+    tooltip:SetCell(y, 1, L["Item Send Queue"], tooltip:GetFont(), "CENTER", 2)
+
     tooltip:AddLine(" ")
 
     if sendCache and next(sendCache) then
@@ -1397,7 +1423,9 @@ function mod:ShowSendQueueGUI()
     tooltip:AddLine(" ")
 
     _addIndentedCell(tooltip, color(L["Close"], "ffd200"), 5, BulkMail.HideSendQueueGUI, BulkMail)
-
+    y = tooltip:AddLine(" ")
+    y = tooltip:AddLine(L["Alt-Click item to add/remove."])
+    y = tooltip:AddLine(L["Shift-Alt-Click item to bulk add/remove."])
     tooltip:SetFrameStrata("FULLSCREEN")
     -- set max height to be 80% of the screen height
     tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.8)
