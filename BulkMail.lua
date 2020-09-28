@@ -719,10 +719,12 @@ Hooks
 function mod:ContainerFrameItemButton_OnModifiedClick(frame, button)
     if IsControlKeyDown() and IsShiftKeyDown() then
         self:QuickSend(frame:GetParent():GetID(), frame:GetID())
-    elseif IsAltKeyDown() and IsShiftKeyDown() then
-        bulkToggleBagItem(frame:GetParent():GetID(), frame:GetID())
     elseif IsAltKeyDown() then
-        sendCacheToggle(frame:GetParent():GetID(), frame:GetID())
+        if button == "LeftButton" then
+            bulkToggleBagItem(frame:GetParent():GetID(), frame:GetID())
+        else
+            sendCacheToggle(frame:GetParent():GetID(), frame:GetID())
+        end
     elseif not IsShiftKeyDown() then
         sendCacheRemove(frame:GetParent():GetID(), frame:GetID())
     end
@@ -1424,8 +1426,8 @@ function mod:ShowSendQueueGUI()
 
     _addIndentedCell(tooltip, color(L["Close"], "ffd200"), 5, BulkMail.HideSendQueueGUI, BulkMail)
     y = tooltip:AddLine(" ")
-    y = tooltip:AddLine(L["Alt-Click item to add/remove."])
-    y = tooltip:AddLine(L["Shift-Alt-Click item to bulk add/remove."])
+    y = tooltip:AddLine(L["Alt-Right Click item to add/remove."])
+    y = tooltip:AddLine(L["Alt-Left Click item to bulk add/remove."])
     tooltip:SetFrameStrata("FULLSCREEN")
     -- set max height to be 80% of the screen height
     tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.8)
