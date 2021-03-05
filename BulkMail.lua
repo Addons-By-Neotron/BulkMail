@@ -20,8 +20,8 @@ local LDB      = LibStub("LibDataBroker-1.1", true)
 BulkMail.L = L
 
 local SUFFIX_CHAR = "\32"
-function CompatGetAuctionItemSubClasses()
-    return {GetAuctionItemSubClasses}
+function CompatGetAuctionItemSubClasses(i)
+    return {GetAuctionItemSubClasses(i)}
 end
 
 local _G = _G
@@ -60,7 +60,7 @@ local ATTACHMENTS_MAX_SEND = ATTACHMENTS_MAX_SEND
 local DressUpItemLink = DressUpItemLink
 local GetAddOnInfo = GetAddOnInfo
 local GetAddOnMetadata = GetAddOnMetadata
-local GetAuctionItemSubClasses = C_AuctionHouse.GetAuctionItemSubClasses or CompatGetAuctionItemSubClasses
+local GetAuctionItemSubClasses = (C_AuctionHouse and C_AuctionHouse.GetAuctionItemSubClasses) or CompatGetAuctionItemSubClasses
 local GetNumAddOns = GetNumAddOns
 local LoadAddOn = LoadAddOn
 local MAX_CONTAINER_ITEMS = MAX_CONTAINER_ITEMS or 36
@@ -89,7 +89,6 @@ local next = next
 local pairs = pairs
 local select = select
 local setmetatable = setmetatable
-local strsub = strsub
 local tonumber = tonumber
 local tostring = tostring
 local type = type
