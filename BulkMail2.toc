@@ -1,8 +1,13 @@
-﻿## Interface: 90002
+﻿## Interface: 90005
+## Interface-Classic: 11306
+## Interface-BCC: 20501
+## Interface-Retail: 90005
+## X-Curse-Project-ID: 13586
+## X-WoWI-ID: 18819
 ## Title: Bulk Mail 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
-## Version: 9.0.2
+## Version: 9.0.5
 ## Author: NeoTron
 ## X-Credits: hyperactiveChipmunk, Kemayo, Kergoth, Bigzero, Tekkub, Mikk (icon)
 ## X-Thanks: hyperactiveChipmunk for making the addon and letting me (NeoTron) take it over
@@ -15,10 +20,6 @@
 ## X-S&D-AtMail: true
 ## X-LoadOn-Mailbox: true
 ## X-LoadOn-Slash: /bulkmail, /bm
-## X-Curse-Packaged-Version: 9.0.2
-## X-Curse-Project-Name: Bulk Mail
-## X-Curse-Project-ID: bulkmail
-## X-Curse-Repository-ID: wow/bulkmail/mainline
 
 embeds.xml
 Locales.xml
