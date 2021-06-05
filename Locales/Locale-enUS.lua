@@ -65,4 +65,6 @@ L["Usage: "] = true
 L["Usage: <itemID> [itemID2, ...]"] = true
 L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'locked'.   Alt-click is recommended for adding items when there is already an item in the Send Mail item frame."] = true
 L["Item Send Queue"] = true
+L["Minimum Matched Item Level"] = true
+L["The minimum item level matched for automatic destinations."] = true
 

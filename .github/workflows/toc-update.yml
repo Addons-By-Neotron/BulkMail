@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Update TOC Interface version
-        uses: p3lim/toc-interface-updater@v1
+        uses: p3lim/toc-interface-updater@v2
         with:
           base: retail # this is default
 

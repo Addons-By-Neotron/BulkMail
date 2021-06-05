@@ -258,7 +258,9 @@ local function rulesCacheDest(item)
         if pt:ItemInSet(itemID, xset) == true then return end
     end
 
-
+    if select(3, GetItemInfo(itemID)) < self.db.char.minItemLevel then
+        return nil
+    end
     local itype, isubtype = select(6, GetItemInfo(itemID)) -- old string based lookup
     local iclass, isubclass = select(12, GetItemInfo(itemID)) -- new class id based lookup
     for dest, rules in pairs(rulesCache) do
@@ -527,7 +529,7 @@ function mod:OnInitialize()
             },
         },
     }, "Default")
-
+    self.db.char.minItemLevel= self.db.char.minItemLevel or 1
     autoSendRules = self.db.factionrealm.autoSendRules  -- local variable for speed/convenience
 
     destCache = new()  -- destinations for which we have rules (or are going to add rules)
@@ -575,6 +577,13 @@ function mod:OnInitialize()
     numItems = 0
     rulesAltered = true
 
+    local itemQualities = {}
+    for k in pairs(Enum.ItemQuality) do
+        local v = Enum.ItemQuality[k]
+        if v < Enum.ItemQuality.Rare then
+            itemQualities[v] = k
+        end
+    end
     self.opts = {
         type = 'group',
         handler = mod,
@@ -620,6 +629,13 @@ function mod:OnInitialize()
                 desc = L["Attach as many items as possible per mail."],
                 get = function() return self.db.char.attachMulti end,
                 set = function(args, v) self.db.char.attachMulti = v end,
+            },
+            attachItemLevelMin = {
+                name = L["Minimum Matched Item Level"], type = 'select',
+                desc = L["The minimum item level matched for automatic destinations."],
+                values = itemQualities,
+                get = function() return self.db.char.minItemLevel  end,
+                set = function(args, v) self.db.char.minItemLevel = v end,
             },
         },
     }
