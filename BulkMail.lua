@@ -93,7 +93,7 @@ local tonumber = tonumber
 local tostring = tostring
 local type = type
 local unpack = unpack
-
+local NUM_LE_ITEM_CLASSES = _G.NUM_LE_ITEM_CLASSES or _G.NUM_LE_ITEM_CLASSS or 19
 local auctionItemClasses, sendCache, destCache, reverseDestCache, destSendCache, rulesCache, autoSendRules, globalExclude -- tables
 local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- variables
 
@@ -569,7 +569,7 @@ function mod:OnInitialize()
     end
 
     auctionItemClasses = {}  -- local itemType value association table
-    for i = 0, NUM_LE_ITEM_CLASSS-1 do
+    for i = 0, NUM_LE_ITEM_CLASSES-1 do
         if not obsoletes[i] then
             auctionItemClasses[i] = GetAuctionItemSubClasses(i)
         end
