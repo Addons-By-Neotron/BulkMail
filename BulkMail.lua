@@ -725,6 +725,23 @@ function mod:MAIL_SHOW()
         self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
 
         SendMailMailButton:Enable()
+        
+        --[[
+        -- This should have its own config option somewhere.
+        -- Ideally, this operation should be done without the
+        -- mail window opening to the user. The user should
+        -- simply hold shift, right click on the mailbox,
+        -- and BulkMail mails all items without ever opening
+        -- the mail frame to the user. The only thing the user
+        -- would see is 'Mail Sent' along with the sound.
+        
+        -- Note: There should likely be a config option to print
+        -- to the chat frame of what items were sent and to where.
+        ]]--
+        if IsShiftKeyDown() then
+            mod:MailFrameTab2_OnClick(MailFrameTab2)
+            mod:SendMailMailButton_OnClick(MailFrameTab2)
+        end
     end
 end
 
