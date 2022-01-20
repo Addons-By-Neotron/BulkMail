@@ -67,6 +67,6 @@ L["WARNING: Cursor item detection is NOT well-defined when multiple items are 'l
 L["Item Send Queue"] = true
 L["Min Matched Quality"] = true
 L["The minimum quality level matched for automatic destinations."] = true
-L["Minr Matched Equipped Quality"] = true
+L["Min Matched Equipped Quality"] = true
 L["The minimum quality level matched for automatic destinations for equippable items / gear."] = true
 
