@@ -258,14 +258,18 @@ local function rulesCacheDest(item)
         if pt:ItemInSet(itemID, xset) == true then return end
     end
 
-    if select(3, GetItemInfo(itemID)) < self.db.char.minItemLevel then
+    local quality = select(3, GetItemInfo(itemID))
+    local  equippable = IsEquippableItem(itemID)
+
+    if (equippable and quality < self.db.char.minItemLevel)
+            or (not equippable and quality < self.db.char.minItemLevelMisc) then
         return nil
     end
     local itype, isubtype = select(6, GetItemInfo(itemID)) -- old string based lookup
     local iclass, isubclass = select(12, GetItemInfo(itemID)) -- new class id based lookup
     for dest, rules in pairs(rulesCache) do
         local canddest
-        if dest ~= UnitName('player') and (rules[itemID] or
+        if string.lower(dest) ~= string.lower(UnitName('player')) and (rules[itemID] or
                 (rules[itype] and rules[itype][isubtype]) or
                 (rules[iclass] and rules[iclass][isubclass])) then
             canddest = dest
@@ -530,6 +534,7 @@ function mod:OnInitialize()
         },
     }, "Default")
     self.db.char.minItemLevel= self.db.char.minItemLevel or 1
+    self.db.char.minItemLevelMisc = self.db.char.minItemLevelMisc or 1
     autoSendRules = self.db.factionrealm.autoSendRules  -- local variable for speed/convenience
 
     destCache = new()  -- destinations for which we have rules (or are going to add rules)
@@ -631,11 +636,18 @@ function mod:OnInitialize()
                 set = function(args, v) self.db.char.attachMulti = v end,
             },
             attachItemLevelMin = {
-                name = L["Minimum Matched Item Level"], type = 'select',
-                desc = L["The minimum item level matched for automatic destinations."],
+                name = L["Min Matched Equipped Quality"], type = 'select',
+                desc = L["The minimum quality level matched for automatic destinations for equippable items / gear."],
                 values = itemQualities,
                 get = function() return self.db.char.minItemLevel  end,
                 set = function(args, v) self.db.char.minItemLevel = v end,
+            },
+            attachItemLevelMinMisc = {
+                name = L["Min Matched Quality"], type = 'select',
+                desc = L["The minimum quality level matched for automatic destinations."],
+                values = itemQualities,
+                get = function() return self.db.char.minItemLevelMisc  end,
+                set = function(args, v) self.db.char.minItemLevelMisc = v end,
             },
         },
     }
