@@ -1,7 +1,7 @@
 ﻿## Interface: 90005
-## Interface-Classic: 11401
-## Interface-BCC: 20503
-## Interface-Retail: 90105
+## Interface-Classic: 11403
+## Interface-BCC: 20504
+## Interface-Retail: 90205
 ## X-Curse-Project-ID: 13586
 ## X-WoWI-ID: 18819
 ## Title: Bulk Mail 
