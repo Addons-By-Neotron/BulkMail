@@ -1,10 +1,10 @@
 ﻿## Interface: 90205
 ## Interface-Classic: 11403
 ## Interface-BCC: 20504
-## Interface-Retail: 90205
 ## Interface-Wrath: 30400
 ## X-Curse-Project-ID: 13586
 ## X-WoWI-ID: 18819
+## X-Wago-ID: VBNBrzNx
 ## Title: Bulk Mail 
 ## Notes: Bulk mail sending made really easy
 ## Notes-ruRU: BulkMail - отсылку почты делает на много легче
