@@ -25,3 +25,4 @@
 embeds.xml
 Locales.xml
 BulkMail.lua
+
