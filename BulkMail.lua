@@ -752,8 +752,9 @@ function mod:OnEnable()
     self:RegisterEvent('MAIL_SHOW')
     self:RegisterEvent('MAIL_CLOSED')
     self:RegisterEvent('PLAYER_ENTERING_WORLD')
-    self:RegisterEvent('PLAYER_INTERACTION_MANAGER_FRAME_HIDE')
-
+    if not _G.GetContainerItemInfo then
+        self:RegisterEvent('PLAYER_INTERACTION_MANAGER_FRAME_HIDE')
+    end
     -- Handle being LoD loaded while at the mailbox
     if MailFrame:IsVisible() then
         self:MAIL_SHOW()
