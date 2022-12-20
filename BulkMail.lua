@@ -33,9 +33,7 @@ local tconcat = table.concat
 local fmt = string.format
 local ChatFrame1EditBox = ChatFrame1EditBox
 local ClickSendMailItemButton = ClickSendMailItemButton
-local GetContainerItemInfo = GetContainerItemInfo
-local GetContainerItemLink = GetContainerItemLink
-local GetContainerNumSlots = GetContainerNumSlots
+
 local GetItemInfo = GetItemInfo
 local GetSendMailItem = GetSendMailItem
 local GetSendMailItemLink = GetSendMailItemLink
@@ -51,7 +49,6 @@ local IsShiftKeyDown = IsShiftKeyDown
 local MoneyInputFrame_GetCopper = MoneyInputFrame_GetCopper
 local MoneyFrame_Update = MoneyFrame_Update
 local NUM_BAG_SLOTS = NUM_BAG_SLOTS
-local PickupContainerItem = PickupContainerItem
 local SendMailCODButton =  SendMailCODButton
 local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
 local CursorHasItem = CursorHasItem
@@ -63,13 +60,11 @@ local GetAddOnMetadata = GetAddOnMetadata
 local GetAuctionItemSubClasses = (C_AuctionHouse and C_AuctionHouse.GetAuctionItemSubClasses) or CompatGetAuctionItemSubClasses
 local GetNumAddOns = GetNumAddOns
 local LoadAddOn = LoadAddOn
-local MAX_CONTAINER_ITEMS = MAX_CONTAINER_ITEMS or 36
 local NUM_CONTAINER_FRAMES = NUM_CONTAINER_FRAMES
 local MailFrame = MailFrame
 local MailFrameTab1 = MailFrameTab1
 local MailFrameTab2 = MailFrameTab2
 local MoneyInputFrame_SetCopper = MoneyInputFrame_SetCopper
-local NUM_CONTAINER_FRAMES = NUM_CONTAINER_FRAMES
 local SetItemButtonDesaturated = SetItemButtonDesaturated
 local StaticPopup_Visible = StaticPopup_Visible
 local UnitName = UnitName
@@ -96,6 +91,23 @@ local unpack = unpack
 local NUM_LE_ITEM_CLASSES = _G.NUM_LE_ITEM_CLASSES or _G.NUM_LE_ITEM_CLASSS or 19
 local auctionItemClasses, sendCache, destCache, reverseDestCache, destSendCache, rulesCache, autoSendRules, globalExclude -- tables
 local cacheLock, sendDest, numItems, rulesAltered, confirmedDestToRemove  -- variables
+
+local GetContainerItemInfo = GetContainerItemInfo
+local GetContainerItemLink = GetContainerItemLink
+local GetContainerNumSlots = GetContainerNumSlots
+local PickupContainerItem = PickupContainerItem
+
+if not GetContainerNumSlots then
+    GetContainerNumSlots = C_Container.GetContainerNumSlots
+    GetContainerItemLink = C_Container.GetContainerItemLink
+    GetContainerItemInfo = function(bag, slot)
+        local item = C_Container.GetContainerItemInfo(bag, slot)
+        if item == nil then return end
+        return item.iconFileID, item.stackCount, item.isLocked, item.quality, item.isReadable, item.hasLoot,
+        item.hyperLink, item.isFiltered, item.hasNoValue, item.itemID, item.isBound
+    end
+    PickupContainerItem = C_Container.PickupContainerItem
+end
 
 --[[----------------------------------------------------------------------------
 Table Handling
@@ -286,6 +298,24 @@ local function rulesCacheDest(item)
     return rdest
 end
 
+-- Returns the frame associated with bag, slot
+local function getBagSlotFrame(bag,slot)
+    if bag >= 0 and bag < NUM_CONTAINER_FRAMES and slot > 0 then
+        local bagslots = GetContainerNumSlots(bag)
+        if bagslots >= slot then
+            return _G["ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1)]
+        end
+    end
+end
+
+-- Shades or unshades the given bag slot
+local function shadeBagSlot(bag,slot,shade)
+    local frame = getBagSlotFrame(bag, slot)
+    if frame ~= nil then
+        SetItemButtonDesaturated(frame, shade)
+    end
+end
+
 -- Updates the "Postage" field in the Send Mail frame to reflect the total
 -- price of all the items that BulkMail will send.
 local function updateSendCost()
@@ -297,29 +327,54 @@ local function updateSendCost()
                 break
             end
         end
-        return MoneyFrame_Update('SendMailCostMoneyFrame', basePrice + 30 * numItems)
+        MoneyFrame_Update('SendMailCostMoneyFrame', basePrice + 30 * numItems)
     else
-        return MoneyFrame_Update('SendMailCostMoneyFrame', GetSendMailPrice())
+        MoneyFrame_Update('SendMailCostMoneyFrame', GetSendMailPrice())
     end
 end
 
--- Returns the frame associated with bag, slot
-local function getBagSlotFrame(bag,slot)
-    if bag >= 0 and bag < NUM_CONTAINER_FRAMES and slot > 0 and slot <= MAX_CONTAINER_ITEMS then
-        local bagslots = GetContainerNumSlots(bag)
-        if bagslots > 0 then
-            return _G["ContainerFrame" .. (bag + 1) .. "Item" .. (bagslots - slot + 1)]
+local function findPattern (str, pattern)
+	return string.find(str, pattern)
+end
+
+local function findExact(str, pattern)
+	if (str == pattern) then
+		return string.find(str, pattern)
+	end
+end
+
+local function simpleFind(tt, exact, text)
+    if not tt or not tt.lines then
+        return
+    end
+    local searchFunction = exact and findExact or findPattern
+    for _,data in ipairs(tt.lines) do
+        if data.leftText and searchFunction(data.leftText, text) then
+            return true
         end
     end
 end
 
--- Shades or unshades the given bag slot
-local function shadeBagSlot(bag,slot,shade)
-    local frame = getBagSlotFrame(bag,slot)
-    if frame then
-        SetItemButtonDesaturated(frame,shade)
+local function multiFind(tt, exact, t1, t2, t3, t4, t5, t6)
+    local found = simpleFind(tt, exact, t1)
+    if not found and t2 then
+        return multiFind(tt, exact, t2, t3, t4, t5, t6)
     end
+    return found
 end
+
+local function isItemMailable(bag, slot)
+    if _G.GetContainerNumSlots then
+        gratuity:SetBagItem(bag, slot)
+        return not gratuity:MultiFind(2, 7, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+                or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, nil, true, true)
+    end
+    local tt = C_TooltipInfo.GetBagItem(bag, slot)
+    return not multiFind(tt, false, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+            or simpleFind(tt, true, ITEM_BIND_ON_EQUIP)
+end
+
+
 
 -- Add a container slot to BulkMail's send queue.
 sendCache = {}
@@ -330,8 +385,7 @@ local function sendCacheAdd(bag, slot, squelch)
     end
     local didAdd = false
     if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
-        gratuity:SetBagItem(bag, slot)
-        if not gratuity:MultiFind(2, 7, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP) or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, nil, true, true) then
+        if isItemMailable(bag, slot) then
             sendCache[bag] = sendCache[bag] or new()
             sendCache[bag][slot] = true;
             numItems = numItems + 1
@@ -367,8 +421,9 @@ local function sendCacheRemove(bag, slot, isBulk)
     end
 end
 
-local function bulkToggleBagItem(bag, slot)
-    local _,_,_,_,_,_, itemLink = GetContainerItemInfo(bag, slot)
+local function bulkToggleBagItem(bag, slot, itemLink)
+    itemLink = itemLink or GetContainerItemLink(bag, slot)
+
     if not itemLink then return end
     local itemId = tonumber(strmatch(itemLink, "item:(%d+)"))
     local shouldRemove =  sendCache and sendCache[bag] and sendCache[bag][slot]
@@ -390,11 +445,13 @@ end
 -- Toggle a container slot's presence in BulkMail's send queue.
 local function sendCacheToggle(bag, slot)
     bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
+    local result
     if sendCache and sendCache[bag] and sendCache[bag][slot] then
-        return sendCacheRemove(bag, slot)
+        result = sendCacheRemove(bag, slot)
     else
-        return sendCacheAdd(bag, slot)
+        result = sendCacheAdd(bag, slot)
     end
+    return result
 end
 
 -- Removes all entries in BulkMail's send queue.
@@ -407,7 +464,7 @@ local function sendCacheCleanup(autoOnly)
         for bag, slots in pairs(sendCache) do
             for slot in pairs(slots) do
                 local item = GetContainerItemLink(bag, slot)
-                if not autoOnly or rulesCacheDest(item) then
+                if autoOnly ~= true or rulesCacheDest(item) then
                     sendCacheRemove(bag, slot, true)
                 end
             end
@@ -427,7 +484,8 @@ local function sendCacheBuild(dest)
         sendCacheCleanup(true)
         if BulkMail.db.char.isSink or dest ~= '' and not destCache[dest] then
             -- no need to check for an item in the autosend list if this character is a sink or if the destination string doesn't have any rules set
-            return mod:RefreshSendQueueGUI()
+            mod:RefreshSendQueueGUI()
+            return
         end
 
         for bag, slot, item in bagIter() do
@@ -548,14 +606,14 @@ function mod:OnInitialize()
 
 
     local obsoletes
-    if GetItemClassInfo(LE_ITEM_CLASS_BATTLEPET) then
+    if GetItemClassInfo(Enum.ItemClass.Battlepet) then
         -- retail
         obsoletes = newHash(
-                LE_ITEM_CLASS_REAGENT, true,
-                LE_ITEM_CLASS_PROJECTILE, true,
-                LE_ITEM_CLASS_QUIVER, true,
-                LE_ITEM_CLASS_QUESTITEM, true, -- can't send quest items
-                LE_ITEM_CLASS_KEY, true,
+                Enum.ItemClass.Reagent, true,
+                Enum.ItemClass.Projectile, true,
+                Enum.ItemClass.Quiver, true,
+                Enum.ItemClass.Questitem, true, -- can't send quest items
+                Enum.ItemClass.Key, true,
                 10, true,  -- Money
                 14,  true -- Permanent
         )
@@ -694,6 +752,7 @@ function mod:OnEnable()
     self:RegisterEvent('MAIL_SHOW')
     self:RegisterEvent('MAIL_CLOSED')
     self:RegisterEvent('PLAYER_ENTERING_WORLD')
+    self:RegisterEvent('PLAYER_INTERACTION_MANAGER_FRAME_HIDE')
 
     -- Handle being LoD loaded while at the mailbox
     if MailFrame:IsVisible() then
@@ -710,13 +769,27 @@ end
 Events
 ------------------------------------------------------------------------------]]
 local mailIsVisible
+
+function mod:PLAYER_INTERACTION_MANAGER_FRAME_HIDE(_, type)
+    if type == Enum.PlayerInteractionType.MailInfo then
+        mod:MAIL_CLOSED()
+    end
+end
+
 function mod:MAIL_SHOW()
     if not mailIsVisible then
         mailIsVisible = true
         if rulesAltered then rulesCacheBuild() end
-        self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
+        if ContainerFrameItemButton_OnModifiedClick then
+            self:SecureHook('ContainerFrameItemButton_OnModifiedClick')
+            self:SecureHook('ContainerFrame_Update')
+        else
+            self:SecureHook('HandleModifiedItemClick')
+            for _, frame in ContainerFrameUtil_EnumerateContainerFrames() do
+                self:SecureHook(frame, "Update", 'ContainerFrame_Update')
+            end
+        end
         self:SecureHook('SendMailFrame_CanSend')
-        self:SecureHook('ContainerFrame_Update')
         self:SecureHook('MoneyInputFrame_OnTextChanged', SendMailFrame_CanSend)
         self:SecureHook('SetItemRef')
         self:HookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
@@ -761,18 +834,35 @@ BulkMail.PLAYER_ENTERING_WORLD = BulkMail.MAIL_CLOSED  -- MAIL_CLOSED doesn't ge
 Hooks
 ------------------------------------------------------------------------------]]
 function mod:ContainerFrameItemButton_OnModifiedClick(frame, button)
+    mod:HandleItemClick(button, frame:GetParent():GetID(), frame:GetID())
+end
+
+function mod:HandleItemClick(button, bag, slot, itemLink)
+    local handled = false
     if IsControlKeyDown() and IsShiftKeyDown() then
-        self:QuickSend(frame:GetParent():GetID(), frame:GetID())
+        self:QuickSend(bag, slot, itemLink)
+        handled = true
     elseif IsAltKeyDown() then
         if button == "LeftButton" then
-            bulkToggleBagItem(frame:GetParent():GetID(), frame:GetID())
+            bulkToggleBagItem(bag, slot, itemLink)
         else
-            sendCacheToggle(frame:GetParent():GetID(), frame:GetID())
+            sendCacheToggle(bag, slot)
         end
+        handled = true
     elseif not IsShiftKeyDown() then
-        sendCacheRemove(frame:GetParent():GetID(), frame:GetID())
+        sendCacheRemove(bag, slot)
+        handled = true
+    end
+    return handled
+end
+
+function mod:HandleModifiedItemClick(itemLink, itemLocation)
+    if itemLocation ~= nil then
+        local bag, slot = itemLocation:GetBagAndSlot()
+        mod:HandleItemClick(GetMouseButtonClicked(), bag, slot, itemLink)
     end
 end
+
 
 function mod:SendMailFrame_CanSend()
     if sendCache and next(sendCache) or GetSendMailItem(1) or SendMailSendMoneyButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney) > 0 then
@@ -782,6 +872,7 @@ function mod:SendMailFrame_CanSend()
 end
 
 function mod:ContainerFrame_Update(...)
+    print(...)
     local frame = ...
     local bag = tonumber(strsub(frame:GetName(),15))
     if bag then bag = bag - 1 else return end
@@ -1047,9 +1138,7 @@ local function updateInventoryConfigTable()
         local itemID = tonumber(strmatch(item or '', "item:(%d+)"))
         if itemID and not dupeCheck[itemID] then
             dupeCheck[itemID] = true
-            gratuity:SetBagItem(bag, slot)
-            if (not gratuity:MultiFind(2, 5, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
-                    or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 5, nil, true, true)) then
+            if isItemMailable(bag, slot) then
                 local link = select(2, GetItemInfo(itemID))
                 local texture = select(10, GetItemInfo(itemID))
                 InventoryConfigTable.args[tostring(itemID)] = newHash(
