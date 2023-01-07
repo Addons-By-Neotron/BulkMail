@@ -97,7 +97,11 @@ local GetContainerItemLink = GetContainerItemLink
 local GetContainerNumSlots = GetContainerNumSlots
 local PickupContainerItem = PickupContainerItem
 
+-- Dragonlands changes.
 if not GetContainerNumSlots then
+    -- Reagent bag is bag #5
+    NUM_BAG_SLOTS = NUM_BAG_SLOTS + 1 
+
     GetContainerNumSlots = C_Container.GetContainerNumSlots
     GetContainerItemLink = C_Container.GetContainerItemLink
     GetContainerItemInfo = function(bag, slot)
