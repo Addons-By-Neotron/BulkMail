@@ -100,7 +100,7 @@ local PickupContainerItem = PickupContainerItem
 -- Dragonlands changes.
 if not GetContainerNumSlots then
     -- Reagent bag is bag #5
-    NUM_BAG_SLOTS = NUM_BAG_SLOTS + 1 
+    NUM_BAG_SLOTS = NUM_BAG_SLOTS + 1
 
     GetContainerNumSlots = C_Container.GetContainerNumSlots
     GetContainerItemLink = C_Container.GetContainerItemLink
@@ -353,8 +353,14 @@ local function simpleFind(tt, exact, text)
     end
     local searchFunction = exact and findExact or findPattern
     for _,data in ipairs(tt.lines) do
-        if data.leftText and searchFunction(data.leftText, text) then
-            return true
+        for _,field in ipairs(data.args) do
+            if field.field == "leftText" then
+                -- print("Matching ", text, "with tooltip line", field.stringVal)
+                if searchFunction(field.stringVal, text) then
+                    return true
+                end
+                break
+            end
         end
     end
 end
