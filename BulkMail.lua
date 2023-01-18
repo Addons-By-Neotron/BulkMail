@@ -372,12 +372,27 @@ local function multiFind(tt, exact, t1, t2, t3, t4, t5, t6)
     end
     return found
 end
-
+local function dump(o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k,v in pairs(o) do
+         if type(k) ~= 'number' then k = '"'..k..'"' end
+         s = s .. '['..k..'] = ' .. dump(v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
+end
 local function isItemMailable(bag, slot)
-    if _G.GetContainerNumSlots then
+    if _G.C_TooltipInfo == nil then
+        local item = ItemLocation:CreateFromBagAndSlot(bag, slot)
+        if item then
+            return not C_Item.IsBound(item)
+        end
         gratuity:SetBagItem(bag, slot)
-        return not gratuity:MultiFind(2, 7, nil, true, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
-                or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, nil, true, true)
+        return not gratuity:MultiFind(2, 7, false, false, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+                or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, false, false, true)
     end
     local tt = C_TooltipInfo.GetBagItem(bag, slot)
     return not multiFind(tt, false, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
@@ -883,7 +898,6 @@ function mod:SendMailFrame_CanSend()
 end
 
 function mod:ContainerFrame_Update(...)
-    print(...)
     local frame = ...
     local bag = tonumber(strsub(frame:GetName(),15))
     if bag then bag = bag - 1 else return end
