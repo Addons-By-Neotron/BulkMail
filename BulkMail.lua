@@ -373,9 +373,9 @@ local function simpleFind(tt, exact, text)
     end
     local searchFunction = exact and findExact or findPattern
     for _,data in ipairs(tt.lines) do
-        if exact then
-            print(data.leftText, "[", text, "]", searchFunction(data.leftText, text))
-        end
+--        if exact then
+--            print(data.leftText, "[", text, "]", searchFunction(data.leftText, text))
+--        end
         if data.args then
             for _,field in ipairs(data.args) do
                 if field.field == "leftText" then
