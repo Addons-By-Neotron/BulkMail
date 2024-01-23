@@ -346,6 +346,26 @@ local function findExact(str, pattern)
 		return string.find(str, pattern)
 	end
 end
+local function dumpTable(tbl, indent)
+    if not indent then indent = 0 end
+    if type(tbl) ~= 'table' then return tostring(tbl) end
+
+    local formatStr = string.rep("  ", indent) -- Create an indentation string
+    local endFormatStr = string.rep("  ", indent - 1)
+    local result = "{\n"
+
+    for k, v in pairs(tbl) do
+        local formattedKey = type(k) == "number" and k or '"' .. k .. '"'
+        result = result .. formatStr .. "[" .. formattedKey .. "] = "
+        if type(v) == "table" then
+            result = result .. dumpTable(v, indent + 1) .. ",\n"
+        else
+            result = result .. tostring(v) .. ",\n"
+        end
+    end
+
+    return result .. endFormatStr .. "}"
+end
 
 local function simpleFind(tt, exact, text)
     if not tt or not tt.lines then
@@ -353,13 +373,20 @@ local function simpleFind(tt, exact, text)
     end
     local searchFunction = exact and findExact or findPattern
     for _,data in ipairs(tt.lines) do
-        for _,field in ipairs(data.args) do
-            if field.field == "leftText" then
-                -- print("Matching ", text, "with tooltip line", field.stringVal)
-                if searchFunction(field.stringVal, text) then
-                    return true
+        -- print(dumpTable(data))
+        if data.args then
+            for _,field in ipairs(data.args) do
+                if field.field == "leftText" then
+                    -- print("Matching ", text, "with tooltip line", field.stringVal)
+                    if searchFunction(field.stringVal, text) then
+                        return true
+                    end
+                    break
                 end
-                break
+            end
+        elseif data.leftText then
+            if searchFunction(data.leftText, text) then
+                return true
             end
         end
     end
@@ -372,18 +399,7 @@ local function multiFind(tt, exact, t1, t2, t3, t4, t5, t6)
     end
     return found
 end
-local function dump(o)
-   if type(o) == 'table' then
-      local s = '{ '
-      for k,v in pairs(o) do
-         if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. dump(v) .. ','
-      end
-      return s .. '} '
-   else
-      return tostring(o)
-   end
-end
+
 local function isItemMailable(bag, slot)
     if _G.C_TooltipInfo == nil then
         local item = ItemLocation:CreateFromBagAndSlot(bag, slot)
