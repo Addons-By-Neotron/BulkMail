@@ -373,7 +373,9 @@ local function simpleFind(tt, exact, text)
     end
     local searchFunction = exact and findExact or findPattern
     for _,data in ipairs(tt.lines) do
-        -- print(dumpTable(data))
+        if exact then
+            print(data.leftText, "[", text, "]", searchFunction(data.leftText, text))
+        end
         if data.args then
             for _,field in ipairs(data.args) do
                 if field.field == "leftText" then
@@ -411,8 +413,10 @@ local function isItemMailable(bag, slot)
                 or gratuity:Find(ITEM_BIND_ON_EQUIP, 2, 7, false, false, true)
     end
     local tt = C_TooltipInfo.GetBagItem(bag, slot)
-    return not multiFind(tt, false, ITEM_SOULBOUND, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+    return not (multiFind(tt, false, ITEM_BIND_QUEST, ITEM_CONJURED, ITEM_BIND_ON_PICKUP)
+            or simpleFind(tt, true, ITEM_SOULBOUND))
             or simpleFind(tt, true, ITEM_BIND_ON_EQUIP)
+
 end
 
 
