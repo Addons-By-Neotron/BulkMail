@@ -1,8 +1,8 @@
-## Interface: 110107
-## Interface-Classic: 11403
+## Interface: 
+## Interface-Classic: 
 ## Interface-BCC: 20504
 ## Interface-Cata: 40402
-## Interface-Mists: 50500
+## Interface-Mists: 
 ## X-Curse-Project-ID: 13586
 ## X-WoWI-ID: 18819
 ## X-Wago-ID: VBNBrzNx
