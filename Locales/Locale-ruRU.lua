@@ -7,3 +7,5 @@ if not L then return end
 -- This file should not be edited manually!
 
 --@localization(locale="ruRU", format="lua_additive_table", handle-subnamespaces="handle-subnamespaces")@
+
+L["The mail attachment slots did not clear. Close and reopen the mailbox before retrying."] = "Ячейки вложений письма не очистились. Закройте и снова откройте почтовый ящик перед повторной попыткой."

@@ -77,5 +77,5 @@ L["Min Matched Quality"] = true
 L["The minimum quality level matched for automatic destinations."] = true
 L["Min Matched Equipped Quality"] = true
 L["The minimum quality level matched for automatic destinations for equippable items / gear."] = true
+L["The mail attachment slots did not clear. Close and reopen the mailbox before retrying."] = true
 L["To"] = true
-
