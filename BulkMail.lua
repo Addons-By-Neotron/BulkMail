@@ -60,6 +60,24 @@ local GetAddOnMetadata = GetAddOnMetadata or C_AddOns.GetAddOnMetadata
 local GetAuctionItemSubClasses = (C_AuctionHouse and C_AuctionHouse.GetAuctionItemSubClasses) or CompatGetAuctionItemSubClasses
 local GetNumAddOns = GetNumAddOns  or C_AddOns.GetNumAddOns
 local LoadAddOn = LoadAddOn or C_AddOns.LoadAddOn
+
+-- Is this rule destination the character currently being played?
+-- UnitName('player') returns only the first word of a two-part character name on
+-- WoW: Forever, so a rule for "Firstname Surname" is compared against
+-- "Firstname", the guard passes, and mail is queued to the sender. GetUnitName
+-- returns the full name there; it is feature-detected for older clients.
+local function isCurrentCharacter(dest)
+    if type(dest) ~= 'string' or dest == '' then return false end
+    local want = dest:lower()
+    local me = UnitName('player')
+    if type(me) == 'string' and me ~= '' and want == me:lower() then return true end
+    if GetUnitName then
+        local full = GetUnitName('player')
+        if type(full) == 'string' and full ~= '' and want == full:lower() then return true end
+    end
+    return false
+end
+
 local NUM_CONTAINER_FRAMES = NUM_CONTAINER_FRAMES
 local MailFrame = MailFrame
 local MailFrameTab1 = MailFrameTab1
@@ -304,7 +322,7 @@ local function rulesCacheDest(item)
     end
     for dest, rules in pairs(rulesCache) do
         local canddest
-        if string.lower(dest) ~= string.lower(UnitName('player')) and (rules[itemID] or
+        if not isCurrentCharacter(dest) and (rules[itemID] or
                 (itype and rules[itype] and rules[itype][isubtype]) or
                 (iclass and rules[iclass] and rules[iclass][isubclass])) then
             canddest = dest
