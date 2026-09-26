@@ -34,7 +34,7 @@ local tconcat = table.concat
 local fmt = string.format
 local ClickSendMailItemButton = ClickSendMailItemButton
 
-local GetItemInfo = GetItemInfo
+local GetItemInfo = GetItemInfo or (C_Item and C_Item.GetItemInfo)
 local GetSendMailItem = GetSendMailItem
 local GetSendMailItemLink = GetSendMailItemLink
 local GetSendMailPrice = GetSendMailPrice
@@ -44,6 +44,7 @@ local ITEM_BIND_QUEST = ITEM_BIND_QUEST
 local ITEM_CONJURED = ITEM_CONJURED
 local ITEM_SOULBOUND = ITEM_SOULBOUND
 local IsAltKeyDown = IsAltKeyDown
+local IsEquippableItem = IsEquippableItem or (C_Item and C_Item.IsEquippableItem)
 local IsControlKeyDown = IsControlKeyDown
 local IsShiftKeyDown = IsShiftKeyDown
 local MoneyInputFrame_GetCopper = MoneyInputFrame_GetCopper
@@ -60,6 +61,17 @@ local GetAddOnMetadata = GetAddOnMetadata or C_AddOns.GetAddOnMetadata
 local GetAuctionItemSubClasses = (C_AuctionHouse and C_AuctionHouse.GetAuctionItemSubClasses) or CompatGetAuctionItemSubClasses
 local GetNumAddOns = GetNumAddOns  or C_AddOns.GetNumAddOns
 local LoadAddOn = LoadAddOn or C_AddOns.LoadAddOn
+-- Some clients expose these only under C_Item. Wrapped rather than aliased
+-- because GetItemClassInfo(Enum.ItemClass.Battlepet) is used below purely as an
+-- "is this retail?" probe, so it has to stay callable and simply return nil.
+local _GetItemClassInfo = GetItemClassInfo or (C_Item and C_Item.GetItemClassInfo)
+local _GetItemSubClassInfo = GetItemSubClassInfo or (C_Item and C_Item.GetItemSubClassInfo)
+local function GetItemClassInfo(classID)
+    if _GetItemClassInfo then return _GetItemClassInfo(classID) end
+end
+local function GetItemSubClassInfo(classID, subClassID)
+    if _GetItemSubClassInfo then return _GetItemSubClassInfo(classID, subClassID) end
+end
 local NUM_CONTAINER_FRAMES = NUM_CONTAINER_FRAMES
 local MailFrame = MailFrame
 local MailFrameTab1 = MailFrameTab1
@@ -1390,7 +1402,7 @@ local function createBlizzardCategoryConfigTable(force)
     )
 
     for itype, subtypes in pairs(auctionItemClasses) do
-        local iname = GetItemClassInfo(itype)
+        local iname = GetItemClassInfo(itype) or ('Type ' .. tostring(itype))
         if #subtypes == 0 then
             ItemTypesConfigTable.args[itype] = newHash('type', "toggle", 'name', iname)
         else
@@ -1471,7 +1483,7 @@ local function _namesForItemRule(rule)
         if rule.subtype ~= nil then
             subtype = GetItemSubClassInfo(rule.type, rule.subtype)
         end
-        return GetItemClassInfo(rule.type), subtype
+        return GetItemClassInfo(rule.type) or tostring(rule.type), subtype
     end
 end
 
