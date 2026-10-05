@@ -1579,6 +1579,8 @@ function mod:OpenEditTooltipGUI(parentframe)
     local tooltip = BulkMail.editQueueTooltip
     if not tooltip then
         tooltip = QTIP:Acquire("BulkMail3EditQueueTooltip")
+        -- forget the tooltip if anything else releases it, so we never reuse a released one
+        tooltip.OnRelease = function() BulkMail.editQueueTooltip = nil end
         tooltip:EnableMouse(true)
         tooltip:SetScript("OnDragStart", function(this) menuFrame = menuFrame and menuFrame:Release() tooltip.StartMoving(this) end)
         tooltip:SetScript("OnDragStop", tooltip.StopMovingOrSizing)
@@ -1793,6 +1795,7 @@ function mod:ShowSendQueueGUI()
     local tooltip = BulkMail.sendQueueTooltip
     if not tooltip then
         tooltip = QTIP:Acquire("BulkMail3SendQueueTooltip")
+        tooltip.OnRelease = function() BulkMail.sendQueueTooltip = nil end
         tooltip:EnableMouse(true)
         tooltip:SetScript("OnDragStart", tooltip.StartMoving)
         tooltip:SetScript("OnDragStop", function()
