@@ -1,4 +1,4 @@
-## Interface: 120105, 50504, 38002, 20506, 11509, 16001
+## Interface: 120105, 120107, 50504, 38002, 20506, 11509, 16001
 ## X-Curse-Project-ID: 13586
 ## X-WoWI-ID: 18819
 ## X-Wago-ID: VBNBrzNx
