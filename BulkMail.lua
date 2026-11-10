@@ -461,6 +461,28 @@ end
 
 
 
+-- Slots the user explicitly removed from the queue this mail session, keyed
+-- [bag][slot] = itemID. Rebuilds from autosend rules skip these so removed
+-- items don't immediately reappear.
+local userExcluded = {}
+
+local function isUserExcluded(bag, slot, itemLink)
+    local id = userExcluded[bag] and userExcluded[bag][slot]
+    return id ~= nil and id == linkToId(itemLink)
+end
+
+local function setUserExcluded(bag, slot, excluded)
+    if excluded then
+        local itemLink = GetContainerItemLink(bag, slot)
+        if itemLink then
+            userExcluded[bag] = userExcluded[bag] or {}
+            userExcluded[bag][slot] = linkToId(itemLink)
+        end
+    elseif userExcluded[bag] then
+        userExcluded[bag][slot] = nil
+    end
+end
+
 -- Add a container slot to BulkMail's send queue.
 sendCache = {}
 local function sendCacheAdd(bag, slot, squelch)
@@ -469,6 +491,7 @@ local function sendCacheAdd(bag, slot, squelch)
         bag, slot, squelch = bag:GetParent():GetID(), bag:GetID(), slot
     end
     local didAdd = false
+    setUserExcluded(bag, slot, false)
     if GetContainerItemInfo(bag, slot) and not (sendCache[bag] and sendCache[bag][slot]) then
         if isItemMailable(bag, slot) then
             sendCache[bag] = sendCache[bag] or new()
@@ -516,6 +539,7 @@ local function bulkToggleBagItem(bag, slot, itemLink)
     for addlBag, addlSlot, item in bagIter() do
         if linkToId(item) == itemId then
             if shouldRemove then
+                setUserExcluded(addlBag, addlSlot, true)
                 sendCacheRemove(addlBag, addlSlot, true)
             elseif not sendCacheAdd(addlBag, addlSlot, true) then
                 mod:Print(fmt(L["Item cannot be mailed: %s."], GetContainerItemLink(addlBag, addlSlot)))
@@ -532,6 +556,7 @@ local function sendCacheToggle(bag, slot)
     bag, slot = slot and bag or bag:GetParent():GetID(), slot or bag:GetID()  -- convert to (bag, slot) if called as (frame)
     local result
     if sendCache and sendCache[bag] and sendCache[bag][slot] then
+        setUserExcluded(bag, slot, true)
         result = sendCacheRemove(bag, slot)
     else
         result = sendCacheAdd(bag, slot)
@@ -561,6 +586,16 @@ local function sendCacheCleanup(autoOnly)
     SendMailFrame_CanSend()
 end
 
+-- Clear button: remove everything and keep autosend from re-adding it.
+local function sendCacheClearByUser()
+    for bag, slots in pairs(sendCache) do
+        for slot in pairs(slots) do
+            setUserExcluded(bag, slot, true)
+        end
+    end
+    sendCacheCleanup()
+end
+
 -- Populate BulkMail's send queue with container slots holding items following
 -- the autosend rules for the current destination (or any destinations
 -- if the destination field is blank).
@@ -587,7 +622,7 @@ local function sendCacheBuild(dest)
         for bag, slot, item in bagIter() do
             local target = rulesCacheDest(item)
             if target then
-                if dest == '' or target:lower() == destLower then
+                if (dest == '' or target:lower() == destLower) and not isUserExcluded(bag, slot, item) then
                     sendCacheAdd(bag, slot, true)
                 end
             end
@@ -993,6 +1028,7 @@ function mod:MAIL_CLOSED()
         mod._lastMailFrame = nil
         self:UnhookAll()
         sendCacheCleanup()
+        wipe(userExcluded)
         self:HideSendQueueGUI()
         self:StopBulkSend()
     end
@@ -1893,7 +1929,7 @@ function mod:ShowSendQueueGUI()
     tooltip:AddLine(" ")
 
     if sendCache and next(sendCache) then
-        _addIndentedCell(tooltip, color(L["Clear"], "ffd200"), 5, sendCacheCleanup)
+        _addIndentedCell(tooltip, color(L["Clear"], "ffd200"), 5, sendCacheClearByUser)
         if SendMailMailButton:IsEnabled() and SendMailMailButton:IsEnabled() ~= 0 then
             _addIndentedCell(tooltip, color(L["Send"], "ffd200"), 5, onSendClick)
         else
