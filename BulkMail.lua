@@ -836,7 +836,7 @@ function mod:OnInitialize()
                             end
                             return false
                         end,
-                        order = 35,
+                        order = 50,
                     },
                     mergeFactions = {
                         name = L["Merge factions"], type = 'execute',
