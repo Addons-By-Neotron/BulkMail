@@ -280,7 +280,7 @@ local function rulesCacheBuild()
         end
         for _, itemTypeTable in ipairs(globalExclude.itemTypes) do
             local rtype, rsubtype = itemTypeTable.type, itemTypeTable.subtype
-            if rsubtype ~= rtype and rulesCache[dest][rtype] then
+            if rsubtype and rulesCache[dest][rtype] then
                 rulesCache[dest][rtype][rsubtype] = nil
             else
                 rulesCache[dest][rtype] = nil
@@ -717,6 +717,19 @@ function mod:OnInitialize()
                 },
             },
         },
+        realm = {
+            -- shared by both factions when shareMode == "merged" (retail only)
+            autoSendRules = {
+                ['*'] = {
+                    include = {
+                        ['*'] = {},
+                    },
+                    exclude = {
+                        ['*'] = {},
+                    },
+                },
+            },
+        },
         char = {
             isSink = false,
             attachMulti = true,
@@ -724,7 +737,12 @@ function mod:OnInitialize()
                 ['*'] = {}
             },
         },
+        global = {
+            characters = {},         -- normalized name -> "Name-Realm", every character seen
+        },
         profile = {
+            ownCharactersOnly = true,
+            confirmOtherRecipients = true,
             sizeMode = "free",
             freePosition = false,
             savedPos = nil,
@@ -732,14 +750,10 @@ function mod:OnInitialize()
     }, "Default")
     self.db.char.minItemLevel= self.db.char.minItemLevel or 1
     self.db.char.minItemLevelMisc = self.db.char.minItemLevelMisc or 1
-    autoSendRules = self.db.factionrealm.autoSendRules  -- local variable for speed/convenience
-
     destCache = new()  -- destinations for which we have rules (or are going to add rules)
     reverseDestCache = new()  -- integer-indexed table of destinations
-    for dest in pairs(autoSendRules) do
-        destCache[dest] = true
-        tinsert(reverseDestCache, dest)
-    end
+    self:SelectRuleStore()  -- sets autoSendRules: per faction, or shared per realm on retail
+    self:CheckFactionSharing()
 
     globalExclude = self.db.char.globalExclude  -- local variable for speed/convenience
 
@@ -793,6 +807,7 @@ function mod:OnInitialize()
             defaultdest = {
                 name = L["Default destination"], type = 'input',
                 desc = L["Set the default recipient of your AutoSend rules"],
+                dialogControl = mod.RECIPIENT_WIDGET,
                 get = function() return self.db.char.defaultDestination end,
                 set = function(args, dest) self.db.char.defaultDestination = dest end,
             },
@@ -803,18 +818,46 @@ function mod:OnInitialize()
                     edit = {
                         name = L["Edit Destinations"], type = 'execute',
                         desc = L["Edit AutoSend definitions."],
-                        func = function() mod:OpenEditTooltipGUI() end,
+                        func = function() mod:OpenRulesEditor() end,
                         order = 30,
+                    },
+                    shareFactions = {
+                        name = L["Share rules between factions"], type = 'toggle',
+                        width = "full",
+                        desc = L["Share one set of AutoSend rules between your Alliance and Horde characters on this realm."],
+                        hidden = function() return not mod:IsCrossFactionMailSupported() end,
+                        get = function() return self.db.realm.shareMode == "merged" end,
+                        set = function(_, v)
+                            if v then mod:OpenShareWizard() else mod:StopSharingRules() end
+                        end,
+                        confirm = function(_, v)
+                            if not v then
+                                return L["Stop sharing rules? Each faction keeps its own copy of the current rules."]
+                            end
+                            return false
+                        end,
+                        order = 35,
+                    },
+                    mergeFactions = {
+                        name = L["Merge factions"], type = 'execute',
+                        desc = L["Share one set of AutoSend rules between your Alliance and Horde characters on this realm."],
+                        hidden = function()
+                            return not mod:IsCrossFactionMailSupported() or self.db.realm.shareMode == "merged"
+                        end,
+                        func = function() mod:OpenShareWizard() end,
+                        order = 36,
                     },
                     clear = {
                         name = L["Clear Realm rules"], type = 'execute',
                         desc = L["Clear all rules for this realm."],
                         func = function()
-                            self.db.factionrealm = new()
                             for i in pairs(autoSendRules) do
                                 autoSendRules[i] = nil
                             end
-                            mod:RefreshEditTooltipGUI() end,
+                            wipe(destCache)
+                            wipe(reverseDestCache)
+                            rulesAltered = true
+                            mod:RefreshRulesEditor() end,
                         confirm = true,
                         order = 40
                     },
@@ -847,6 +890,20 @@ function mod:OnInitialize()
                 values = itemQualities,
                 get = function() return self.db.char.minItemLevelMisc  end,
                 set = function(args, v) self.db.char.minItemLevelMisc = v end,
+            },
+            ownCharactersOnly = {
+                name = L["My characters only"], type = 'toggle',
+                desc = L["Limit name suggestions in the mail To: field to your own characters and AutoSend destinations."],
+                get = function() return self.db.profile.ownCharactersOnly end,
+                set = function(_, v) mod:SetOwnCharactersOnly(v) end,
+                order = 4200,
+            },
+            confirmOtherRecipients = {
+                name = L["Confirm other players"], type = 'toggle',
+                desc = L["Ask before sending mail to a character that is not yours or an AutoSend destination."],
+                get = function() return self.db.profile.confirmOtherRecipients end,
+                set = function(_, v) self.db.profile.confirmOtherRecipients = v end,
+                order = 4300,
             },
             sizeMode = {
                 name = L["Window Size"],
@@ -892,7 +949,7 @@ function mod:OnInitialize()
                             L["Right click to open the config menu."], "ffd200"),
                     OnClick = function(clickedframe, button)
                         if button == "LeftButton" then
-                            mod:OpenEditTooltipGUI(clickedframe)
+                            mod:ToggleRulesEditor()
                         elseif button == "MiddleButton" then
                             mod:ToggleConfigDialog()
                         elseif button == "RightButton" then
@@ -924,6 +981,10 @@ function mod:OnEnable()
     if not _G.GetContainerItemInfo then
         self:RegisterEvent('PLAYER_INTERACTION_MANAGER_FRAME_HIDE')
     end
+    self:RecordCharacter()
+    if self:IsShareDecisionPending() then
+        self:Print(L["Your Alliance and Horde characters on this realm have separate AutoSend rules. Open the rules editor to merge them or keep them separate."])
+    end
     -- Handle being LoD loaded while at the mailbox
     if MailFrame:IsVisible() then
         self:MAIL_SHOW()
@@ -949,6 +1010,7 @@ end
 function mod:MAIL_SHOW()
     -- Allow TSM frame detection to re-scan (TSM may create its frame lazily)
     MagicUtil:ResetTSMFrameCache()
+    self:UpdateMailAutoComplete()
     if not mailIsVisible then
         mailIsVisible = true
         if rulesAltered then rulesCacheBuild() end
@@ -968,6 +1030,7 @@ function mod:MAIL_SHOW()
         self:RawHookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
         self:RawHookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
         self:RawHookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
+        self:RawHookScript(SendMailNameEditBox, 'OnTabPressed', 'SendMailNameEditBox_OnTabPressed')
         self:RegisterEvent('MAIL_SEND_SUCCESS')
         self:RegisterEvent('SECURE_TRANSFER_CANCEL')
         self:RegisterEvent('MAIL_FAILED')
@@ -1158,6 +1221,13 @@ function mod:SendMailMailButton_OnClick(frame, a1)
                 end
             end
         end
+        local dest = SendMailNameEditBox:GetText()
+        if dest ~= '' and not self:CheckRecipient(dest, function()
+                    _G.this = SendMailMailButton
+                    self.hooks[frame].OnClick(frame, a1)
+                end, function() cacheLock = false end) then
+            return
+        end
         _G.this = SendMailMailButton
         return self.hooks[frame].OnClick(frame, a1)
     end
@@ -1174,6 +1244,15 @@ function mod:MailFrameTab2_OnClick(frame, a1)
     self:ShowSendQueueGUI()
     self:ScheduleTimer(updateSendCost, 0.01)
     return self.hooks[frame].OnClick(frame, a1)
+end
+
+function mod:SendMailNameEditBox_OnTabPressed(frame, ...)
+    local list = AutoCompleteBox
+    if list and list:IsShown() and list.parent == frame and not IsShiftKeyDown() then
+        self:AutoCompleteTab(frame)
+        return
+    end
+    self.hooks[frame].OnTabPressed(frame, ...)
 end
 
 function mod:SendMailNameEditBox_OnTextChanged(frame, a1)
@@ -1218,6 +1297,9 @@ function mod:Send(cod)
     if GetSendMailItem(1) then
         SendMailNameEditBox:SetText((sendDest ~= '' and sendDest or rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination) or '')
         if SendMailNameEditBox:GetText() ~= '' then
+            if not self:CheckRecipient(SendMailNameEditBox:GetText(), function() self:Send(cod) end, function() self:StopBulkSend() end) then
+                return
+            end
             if #suffix > 10 then suffix = SUFFIX_CHAR else suffix = suffix..SUFFIX_CHAR end
             _G.this = SendMailMailButton
             return self.hooks[SendMailMailButton].OnClick(SendMailMailButton)
@@ -1231,6 +1313,9 @@ function mod:Send(cod)
     end
     if destSendCache and next(destSendCache) then
         local dest, bagslots = next(destSendCache)
+        if not self:CheckRecipient(dest, function() self:Send(cod) end, function() self:StopBulkSend() end) then
+            return
+        end
         local bag, slot
         for i=1, min(self.db.char.attachMulti and ATTACHMENTS_MAX_SEND or 1, #bagslots) do
             bag, slot = unpack(tremove(bagslots))
@@ -1279,8 +1364,12 @@ function mod:QuickSend(bag, slot)
                 SendMailNameEditBox:SetText(rulesCacheDest(GetSendMailItemLink(1)) or self.db.char.defaultDestination or '')
             end
             if SendMailNameEditBox:GetText() ~= '' then
-                _G.this = SendMailMailButton
-                return self.hooks[SendMailMailButton].OnClick(SendMailMailButton)
+                local function send()
+                    _G.this = SendMailMailButton
+                    return self.hooks[SendMailMailButton].OnClick(SendMailMailButton)
+                end
+                if not self:CheckRecipient(SendMailNameEditBox:GetText(), send) then return end
+                return send()
             elseif not self.db.char.defaultDestination then
                 self:Print(L["No default destination set."])
                 self:Print(L["Enter a name in the To: field or set a default destination with |cff00ffaa/bulkmail defaultdest|r."])
@@ -1292,213 +1381,235 @@ function mod:QuickSend(bag, slot)
 end
 
 --[[----------------------------------------------------------------------------
-QTip Windows -- AutoSend Edit GUI
+Recipients: autocomplete limited to your own characters, and a confirmation
+before mailing anyone else.
 ------------------------------------------------------------------------------]]
-local shown = {}  -- keeps track of collapsed/expanded state in tablet
-local curRuleSet -- for adding rules via the menu dropdown
-local dupeCheck = {}
+local function setupRecipients()
+    local strlower = string.lower
+    local tsort = table.sort
+    local Flags = Enum and Enum.AutoCompleteEntryFlag
+    local ACCOUNT_CHARACTER = Flags and Flags.AccountCharacter or 0x80
+    local PRIORITY_ACCOUNT = Enum and Enum.AutoCompletePriority and Enum.AutoCompletePriority.AccountCharacter or 5
+    local autoCompleteResults = (C_AutoComplete and C_AutoComplete.GetAutoCompleteResults) or GetAutoCompleteResults
+    local approvedThisSession = {}
+    local blizzardSource  -- SendMailNameEditBox's own autocomplete, while we override it
 
-local function newDest()
-    StaticPopup_Show("BULKMAIL_ADD_DESTINATION")
-end
-
-local function _insertOrRemoveRule(ruletype, value)
-    local removed
-    for i, v in ipairs(curRuleSet[ruletype]) do
-        if ruletype == "itemTypes" then
-            if v.type == value.type and v.subtype == value.subtype then
-                removed = true
-            end
-        elseif v == value then
-            removed = true
+    local function currentRealm()
+        local realm = GetNormalizedRealmName and GetNormalizedRealmName()
+        if not realm or realm == "" then
+            realm = (GetRealmName() or ""):gsub("[%s%-]", "")
         end
-        if removed then
-            tremove(curRuleSet[ruletype], i)
-            if type(value) == "table" then
-                del(value)
-            end
-            break
+        return realm
+    end
+
+    -- "Name" or "Name-Realm" -> "name-realm" (realm without spaces or dashes)
+    local function normalize(name)
+        name = strmatch(name or "", "^%s*(.-)%s*$")
+        if name == "" then return nil end
+        local char, realm = strmatch(name, "^(.-)%-(.+)$")
+        if not char or char == "" then
+            char, realm = name, currentRealm()
+        end
+        realm = realm:gsub("[%s%-]", "")
+        return strlower(char .. "-" .. realm)
+    end
+
+    -- Remembers every character that logs in with BulkMail enabled.
+    function mod:RecordCharacter()
+        local name = (GetUnitName and GetUnitName("player")) or UnitName("player")
+        local key = normalize(name)
+        if key then
+            self.db.global.characters[key] = name .. "-" .. currentRealm()
         end
     end
-    if not removed then
-        tinsert(curRuleSet[ruletype], value)
-    end
-    rulesAltered = true
-    mod:RefreshEditTooltipGUI()
-end
 
-local function _editCallbackMethod(args, val)
-    -- get the value based on the type of data
-    local value
-    local ruletype = tremove(args, 1)
-    if ruletype == "itemIDs" then
-        local uniqueids = new()
-        for id in val:gmatch("([^% ]+)") do
-            id = tonumber(id)
-            if id then uniqueids[id] = true end
-        end
-
-        for id in pairs(uniqueids) do
-            _insertOrRemoveRule("items", id)
-        end
-        return
-    elseif ruletype == "pt31Sets" then
-        value = tconcat(args, ".")
-    elseif ruletype == "items" then
-        value = tonumber(args[1])
-    elseif ruletype == "itemTypes" then
-        value = newHash('type', args[1],
-                'subtype', #args > 1 and args[2]);
-    end
-    _insertOrRemoveRule(ruletype, value)
-end
-
-local Ace3ConfigTable = {
-    type = "group",
-    handler = BulkMail,
-    set = _editCallbackMethod,
-    get = function() return nil end,
-    args = {
-        inline = {
-            type = "header",
-            name = L["Add rule"],
-            inline = true,
-            order = 0,
-        },
-        itemIDs = {
-            type = "input",
-            name = L["ItemID(s)"],
-            desc = L["Usage: <itemID> [itemID2, ...]"]
-        }
-    }
-}
-
-local menuFrame
-local PT31ConfigTable
-local ItemTypesConfigTable
-local InventoryConfigTable
-
-local function updateInventoryConfigTable()
-    deepDel(InventoryConfigTable)
-    InventoryConfigTable = newHash(
-            'type', "group",
-            'name', L["Items from Bags"],
-            'desc', L["Mailable items in your bags."],
-            'args', new()
-    )
-
-    for k in pairs(dupeCheck) do dupeCheck[k] = nil end
-
-    -- Mailable items in bags
-    for bag, slot, item in bagIter() do
-        local itemID = tonumber(strmatch(item or '', "item:(%d+)"))
-        if itemID and not dupeCheck[itemID] then
-            dupeCheck[itemID] = true
-            if isItemMailable(bag, slot) then
-                local link = select(2, GetItemInfo(itemID))
-                local texture = select(10, GetItemInfo(itemID))
-                InventoryConfigTable.args[tostring(itemID)] = newHash(
-                        "type", "toggle",
-                        "name", fmt("|T%s:18|t%s", texture, link)
-                )
+    local function isOwnCharacter(dest)
+        local key = normalize(dest)
+        if not key then return false end
+        if mod.db.global.characters[key] then return true end
+        if autoCompleteResults then
+            local cursor = strlenutf8 and strlenutf8(dest) or #dest
+            local ok, results = pcall(autoCompleteResults, dest, 10, cursor, true, ACCOUNT_CHARACTER, 0)
+            if ok and type(results) == "table" then
+                for _, r in ipairs(results) do
+                    if r.name and normalize(r.name) == key then return true end
+                end
             end
         end
+        return false
     end
-end
 
-local function createPT31SetsConfigTable(force)
-    -- LibPeriodicTable-3.1 sets
-    if force then PT31ConfigTable = deepDel(PT31ConfigTable) end
-    if PT31ConfigTable then return end
-
-    PT31ConfigTable = newHash(
-            'type', "group",
-            'name', L["Periodic Table Set"],
-            'args', new()
-    )
-
-    local pathtable = new()
-    local curmenu, prevmenu
-    for setname in pairs(pt.sets) do
-        for k in ipairs(pathtable) do pathtable[k] = nil end
-        curmenu = PT31ConfigTable.args
-        for cat in setname:gmatch("([^%.]+)") do
-            tinsert(pathtable, cat)
-            if not curmenu[cat] then
-                curmenu[cat] = newHash('name', cat,
-                        'type', 'group',
-                        'args', new())
-            end
-            prevmenu, curmenu = curmenu[cat], curmenu[cat].args
+    local function isTrusted(dest)
+        local key = normalize(dest)
+        if not key then return true end
+        if approvedThisSession[key] then return true end
+        for d in pairs(destCache) do
+            if normalize(d) == key then return true end
         end
-        prevmenu.type = "toggle"
+        local default = mod.db.char.defaultDestination
+        if default and normalize(default) == key then return true end
+        return isOwnCharacter(dest)
     end
-end
 
-local function createBlizzardCategoryConfigTable(force)
-    -- Blizzard item types
-    if force then ItemTypesConfigTable = deepDel(ItemTypesConfigTable) end
-    if ItemTypesConfigTable then return end
+    local function notifyOptions()
+        local registry = LibStub("AceConfigRegistry-3.0", true)
+        if registry then registry:NotifyChange(L["Bulk Mail"] .. VERSION) end
+    end
 
-    ItemTypesConfigTable = newHash(
-            'type', "group",
-            'name', L["Item Type"],
-            'args', new()
-    )
+    -- Returns true when mail to dest may go out right away. Otherwise asks,
+    -- and calls proceed() or cancel() once the user has answered.
+    function mod:CheckRecipient(dest, proceed, cancel)
+        if not self.db.profile.confirmOtherRecipients or isTrusted(dest) then return true end
+        MagicUtil:ShowConfirmDialog({
+            text = fmt(L["%s is not one of your characters. Send the mail anyway?"], dest),
+            acceptText = L["Send"],
+            checkboxText = L["Don't ask again"],
+            onAccept = function(dontAsk)
+                approvedThisSession[normalize(dest)] = true
+                if dontAsk then
+                    mod.db.profile.confirmOtherRecipients = false
+                    notifyOptions()
+                    mod:Print(L["You won't be asked again. Turn on Confirm other players in the options to undo this."])
+                end
+                proceed()
+            end,
+            onCancel = cancel,
+        })
+        return false
+    end
 
-    for itype, subtypes in pairs(auctionItemClasses) do
-        local iname = GetItemClassInfo(itype)
-        if #subtypes == 0 then
-            ItemTypesConfigTable.args[itype] = newHash('type', "toggle", 'name', iname)
+    -- Autocomplete source: the game's results, plus characters BulkMail has
+    -- seen and AutoSend destinations that start with the typed text.
+    local function recipientSource(text, numResults, cursorPosition, allowFullMatch, include, exclude)
+        local results
+        if autoCompleteResults then
+            results = autoCompleteResults(text, numResults, cursorPosition, allowFullMatch, include, exclude)
+        end
+        results = type(results) == "table" and results or {}
+        local prefix = strlower(text or "")
+        if prefix == "" then return results end
+
+        local have = {}
+        for _, r in ipairs(results) do
+            if r.name then have[normalize(r.name) or ""] = true end
+        end
+        local function add(display)
+            if #results >= numResults then return end
+            local key = normalize(display)
+            if key and not have[key] and strlower(display):sub(1, #prefix) == prefix then
+                have[key] = true
+                results[#results + 1] = { name = display, priority = PRIORITY_ACCOUNT }
+            end
+        end
+
+        local realm = strlower(currentRealm())
+        local names = {}
+        for _, full in pairs(mod.db.global.characters) do
+            local char, r = strmatch(full, "^(.-)%-(.+)$")
+            names[#names + 1] = (char and strlower(r) == realm) and char or full
+        end
+        tsort(names)
+        for _, n in ipairs(names) do add(n) end
+
+        local dests = {}
+        for d in pairs(destCache) do dests[#dests + 1] = d end
+        tsort(dests)
+        for _, d in ipairs(dests) do add(d) end
+        return results
+    end
+
+    function mod:ApplyRecipientAutoComplete(box)
+        if not box or not AutoCompleteEditBox_SetAutoCompleteSource then return end
+        local include, exclude
+        if self.db.profile.ownCharactersOnly then
+            include, exclude = ACCOUNT_CHARACTER, 0
+        elseif AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL then
+            include, exclude = AUTOCOMPLETE_LIST.MAIL.include, AUTOCOMPLETE_LIST.MAIL.exclude
         else
-            local supertype = new()
-            ItemTypesConfigTable.args[itype] = newHash(
-                    'type', "group",
-                    'name', iname,
-                    'args', supertype
-            )
+            return
+        end
+        AutoCompleteEditBox_SetAutoCompleteSource(box, recipientSource, include, exclude)
+    end
 
-            for _, isubtype in ipairs(subtypes) do
-                local name = GetItemSubClassInfo(itype, isubtype)
-                supertype[isubtype] = newHash('type', "toggle", 'name', name)
+    function mod:SetOwnCharactersOnly(value)
+        self.db.profile.ownCharactersOnly = value and true or false
+        self:UpdateMailAutoComplete()
+        notifyOptions()
+    end
+
+    -- Blizzard's Tab only moves the highlight through the suggestions and
+    -- Enter takes it. Tab takes the highlighted name here; Shift-Tab and the
+    -- arrow keys still move through the list. Returns true when handled.
+    function mod:AutoCompleteTab(box)
+        local list = AutoCompleteBox
+        if list and list:IsShown() and list.parent == box and not IsShiftKeyDown()
+            and AutoCompleteEditBox_OnEnterPressed then
+            return AutoCompleteEditBox_OnEnterPressed(box)
+        end
+        return AutoCompleteEditBox_OnTabPressed and AutoCompleteEditBox_OnTabPressed(box)
+    end
+
+    -- Blizzard's To: field is only touched while the option is on, so other
+    -- mail addons keep their own suggestions otherwise.
+    function mod:UpdateMailAutoComplete()
+        local box = SendMailNameEditBox
+        if box then
+            if self.db.profile.ownCharactersOnly then
+                if not blizzardSource then
+                    blizzardSource = { source = box.autoCompleteSource, params = box.autoCompleteParams }
+                end
+                self:ApplyRecipientAutoComplete(box)
+            elseif blizzardSource then
+                box.autoCompleteSource, box.autoCompleteParams = blizzardSource.source, blizzardSource.params
+                blizzardSource = nil
             end
         end
+        if self._recipientBar then
+            self:ApplyRecipientAutoComplete(self._recipientBar.editBox)
+            if self._recipientBar.ownOnly then
+                self._recipientBar.ownOnly:SetChecked(self.db.profile.ownCharactersOnly)
+            end
+        end
+        if self._destInput then self:ApplyRecipientAutoComplete(self._destInput) end
+    end
+
+    -- An AceGUI edit box with name completion, for name fields in the
+    -- options (dialogControl = RECIPIENT_WIDGET). It wraps AceGUI's own
+    -- EditBox and adds the autocomplete handlers on top of its scripts.
+    local AceGUI = LibStub("AceGUI-3.0", true)
+    if AceGUI and AutoCompleteEditBox_SetAutoCompleteSource then
+        local widgetType = "BulkMail-RecipientEditBox"
+        mod.RECIPIENT_WIDGET = widgetType
+        AceGUI:RegisterWidgetType(widgetType, function()
+            local widget = AceGUI:Create("EditBox")
+            widget.type = widgetType
+            local box = widget.editbox
+            box.addHighlightedText = true
+            box.autoCompleteContext = "mail"
+
+            local onEnter = box:GetScript("OnEnterPressed")
+            box:SetScript("OnEnterPressed", function(self, ...)
+                if AutoCompleteEditBox_OnEnterPressed(self) then return end
+                if onEnter then onEnter(self, ...) end
+            end)
+            local onEscape = box:GetScript("OnEscapePressed")
+            box:SetScript("OnEscapePressed", function(self, ...)
+                if AutoCompleteEditBox_OnEscapePressed(self) then return end
+                if onEscape then onEscape(self, ...) end
+            end)
+            box:SetScript("OnTabPressed", function(self) mod:AutoCompleteTab(self) end)
+            box:SetScript("OnArrowPressed", AutoCompleteEditBox_OnArrowPressed)
+            box:HookScript("OnTextChanged", AutoCompleteEditBox_OnTextChanged)
+            box:HookScript("OnChar", AutoCompleteEditBox_OnChar)
+            box:HookScript("OnKeyDown", AutoCompleteEditBox_OnKeyDown)
+            box:HookScript("OnKeyUp", AutoCompleteEditBox_OnKeyUp)
+            box:HookScript("OnEditFocusGained", function(self) mod:ApplyRecipientAutoComplete(self) end)
+            box:HookScript("OnEditFocusLost", AutoCompleteEditBox_OnEditFocusLost)
+            return widget
+        end, 1)
     end
 end
-
--- Show the add new data menu
--- Fun stuff
-local function _showmenu(parentFrame, args)
-    -- release if if already shown
-    menuFrame = menuFrame and menuFrame:Release()
-
-    -- Create the config structures
-    createBlizzardCategoryConfigTable(force)
-    createPT31SetsConfigTable(force)
-    updateInventoryConfigTable()
-
-    -- Inject into the overall structure
-    Ace3ConfigTable.args.pt31Sets  = PT31ConfigTable
-    Ace3ConfigTable.args.itemTypes = ItemTypesConfigTable
-    Ace3ConfigTable.args.items     = InventoryConfigTable
-
-
-    -- save the current ruleset
-    curRuleSet = args
-
-    -- create the menu
-    menuFrame = LD:OpenAce3Menu(Ace3ConfigTable)
-
-    -- Anchor the menu to the mouse
-    local xpos, ypos = GetCursorPosition()
-    local scale = UIParent:GetEffectiveScale()
-    menuFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", xpos / scale, ypos / scale)
-    menuFrame:SetFrameLevel(parentFrame:GetFrameLevel()+100)
-end
-
-local function _plusminus(enabled)
-    return fmt("|TInterface\\Buttons\\UI-%sButton-Up:18|t", enabled and "Minus" or "Plus")
-end
+setupRecipients()
 
 local function _addIndentedCell(tooltip, text, indentation, func, arg)
     local y, x = tooltip:AddLine()
@@ -1508,79 +1619,6 @@ local function _addIndentedCell(tooltip, text, indentation, func, arg)
     end
     return y, x
 end
-
-local function _toggleEditHeader(frame, dest)
-    menuFrame = menuFrame and menuFrame:Release()
-
-    if IsAltKeyDown() and dest ~= "globalExclude" then
-        StaticPopup_Show('BULKMAIL_REMOVE_DESTINATION', nil, nil, dest)
-    else
-        shown[dest] = not shown[dest]
-    end
-    mod:RefreshEditTooltipGUI()
-end
-
-local function _namesForItemRule(rule)
-    if type(rule) == "string" then
-        return rule.type, rule.subtype
-    else
-        local subtype
-        if rule.subtype ~= nil then
-            subtype = GetItemSubClassInfo(rule.type, rule.subtype)
-        end
-        return GetItemClassInfo(rule.type), subtype
-    end
-end
-
-
-local function _listRulesQTip(tooltip, ruleset)
-    local x, y
-    local addedRule
-    if ruleset then
-        for ruletype, rules in pairs(ruleset) do
-            for k, rule in ipairs(rules) do
-                local checkIcon
-                local text, color = tostring(rule), "ffffff"
-                local func = function(frame)
-                    menuFrame = menuFrame and menuFrame:Release()
-                    if IsAltKeyDown() then
-                        tremove(rules, k)
-                        mod:RefreshEditTooltipGUI()
-                        rulesAltered = true
-                    end
-                end
-
-                if ruletype == 'items' then
-                    text = select(2, GetItemInfo(rule))
-                    checkIcon = select(10, GetItemInfo(rule))
-                elseif ruletype == 'itemTypes' then
-                    local name, subtype = _namesForItemRule(rule)
-                    if subtype ~= nil then
-                        text = fmt("|cfffadfa8Item Type: %s - %s|r", name, subtype)
-                    else
-                        text = fmt("|cfffadfa8Item Type: %s|r", name)
-                    end
-                elseif ruletype == 'pt31Sets' then
-                    text = fmt("|cffc8c8ffPT31 Set: %s|r", rule)
-                end
-                addedRule = true
-                if(checkIcon) then
-                    _addIndentedCell(tooltip, fmt("|T%s:18|t%s", checkIcon, text), 30, func)
-                else
-                    _addIndentedCell(tooltip, text, 30, func)
-                end
-            end
-        end
-    end
-    if not addedRule then
-        y, x = tooltip:AddLine()
-        --:SetCell(lineNum, colNum, value[, font][, justification][, colSpan][, provider][, leftPadding][, rightPadding][, maxWidth][, minWidth][, ...])
-        tooltip:SetCell(y, x, L["None"], tooltip:GetFont(), "LEFT", 1, nil, 30)
-        return
-    end
-
-end
-
 
 local function _QTipClose(tooltip)
     if not tooltip then return end
@@ -1593,91 +1631,1800 @@ local function _QTipClose(tooltip)
     QTIP:Release(tooltip)
 end
 
-local function _sendEditQueueClose()
-    _QTipClose(BulkMail.editQueueTooltip)
-    BulkMail.editQueueTooltip = nil
-    menuFrame = menuFrame and menuFrame:Release()
-end
+--[[----------------------------------------------------------------------------
+AutoSend Rules Editor
+------------------------------------------------------------------------------]]
+-- Wrapped in a function so its locals don't count against the main chunk's
+-- 200 local variable limit.
+local function setupRulesEditor()
+    local BACKDROP_TEMPLATE = BackdropTemplateMixin and "BackdropTemplate" or nil
+    local GetItemIcon = GetItemIcon or (C_Item and C_Item.GetItemIconByID)
+    local strfind, strlower = string.find, string.lower
+    local tsort = table.sort
 
-function mod:RefreshEditTooltipGUI()
-    if rulesAltered then
-        sendCacheCleanup(true)
-        rulesCacheBuild()
-        sendCacheBuild(SendMailNameEditBox:GetText())
-        mod:RefreshSendQueueGUI()
-    end
-    if BulkMail.editQueueTooltip then
-        mod:OpenEditTooltipGUI()
-    end
-end
+    local ICON_TYPE    = [[Interface\Icons\INV_Misc_Bag_07]]
+    local ICON_SET     = [[Interface\Icons\INV_Misc_Book_09]]
+    local ICON_UNKNOWN = [[Interface\Icons\INV_Misc_QuestionMark]]
+    local TAG_ITEM = { 0.6, 0.8, 1 }
+    local TAG_TYPE = { 0.98, 0.87, 0.66 }
+    local TAG_SET  = { 0.78, 0.78, 1 }
 
-function mod:OpenEditTooltipGUI(parentframe)
-    local tooltip = BulkMail.editQueueTooltip
-    if not tooltip then
-        tooltip = QTIP:Acquire("BulkMail3EditQueueTooltip")
-        -- forget the tooltip if anything else releases it, so we never reuse a released one
-        tooltip.OnRelease = function() BulkMail.editQueueTooltip = nil end
-        tooltip:EnableMouse(true)
-        tooltip:SetScript("OnDragStart", function(this) menuFrame = menuFrame and menuFrame:Release() tooltip.StartMoving(this) end)
-        tooltip:SetScript("OnDragStop", tooltip.StopMovingOrSizing)
-        tooltip:RegisterForDrag("LeftButton")
-        tooltip:SetMovable(true)
-        tooltip:SetColumnLayout(1, "LEFT")
-        if parentframe then
-            tooltip:SetPoint("TOPLEFT", parentframe, "BOTTOMLEFT", 0, 0)
-        else
-            tooltip:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    local WIDTH, HEIGHT = 940, 500
+
+    local GLOBAL = {}  -- sentinel for the global exclude list (never collides with a name)
+    local editor
+    local selectedDest             -- destination name or GLOBAL
+    local selectedTab = "include"  -- "include" or "exclude"
+    local pickerMode = "bags"      -- "bags", "types" or "sets"
+    local typeClass                -- item class being browsed in the type picker
+    local setPath                  -- set group being browsed in the set picker ("A.B")
+    local searchFilter             -- lowercased search text, or nil
+    local sortedSets, sortedSetsLower
+
+    ---------------------------------------------------------------------------
+    -- Rule data helpers
+    ---------------------------------------------------------------------------
+    local function currentRuleset()
+        if selectedDest == GLOBAL then
+            return globalExclude
+        elseif selectedDest and destCache[selectedDest] then
+            return autoSendRules[selectedDest][selectedTab]
         end
-        self.editQueueTooltip = tooltip
-    else
-        tooltip:Clear()
     end
 
-    local y = tooltip:AddHeader();
-    tooltip:SetCell(y, 1, color(L["AutoSend Rules"], "ffd200"), tooltip:GetHeaderFont(), "CENTER", 1)
-    tooltip:AddLine(" ")
+    local function findItem(rs, id)
+        for i, v in ipairs(rs.items) do
+            if tonumber(v) == id then return i end
+        end
+    end
 
-    for dest, rulesets in pairs(autoSendRules) do
-        if destCache[dest] then
-            -- category title (destination character's name)
-            y = tooltip:AddLine(_plusminus(shown[dest]) ..dest)
-            tooltip:SetLineScript(y, "OnMouseUp", _toggleEditHeader, dest)
-            if shown[dest] then
-                _addIndentedCell(tooltip, color(L["Include"], "ffd200"), 20, _showmenu, rulesets.include)
-                _listRulesQTip(tooltip, rulesets.include)
-                -- "exclude" rules for this destination; clicking brings up menu to add new exclude rules
-                _addIndentedCell(tooltip, color(L["Exclude"], "ffd200"), 20, _showmenu, rulesets.exclude)
-                _listRulesQTip(tooltip, rulesets.exclude)
-                tooltip:AddLine(" ")
+    local function findSet(rs, set)
+        for i, v in ipairs(rs.pt31Sets) do
+            if v == set then return i end
+        end
+    end
+
+    local function findType(rs, itype, isubtype)
+        isubtype = isubtype or nil  -- old rules store "whole class" as subtype = false
+        for i, v in ipairs(rs.itemTypes) do
+            if v.type == itype and (v.subtype or nil) == isubtype then return i end
+        end
+    end
+
+    local function commit()
+        rulesAltered = true
+        mod:RefreshRulesEditor()
+    end
+
+    local function addItem(id)
+        local rs = currentRuleset()
+        if rs and id and not findItem(rs, id) then
+            tinsert(rs.items, id)
+            commit()
+        end
+    end
+
+    local function toggleItem(id)
+        local rs = currentRuleset()
+        if not rs then return end
+        local idx = findItem(rs, id)
+        if idx then tremove(rs.items, idx) else tinsert(rs.items, id) end
+        commit()
+    end
+
+    local function toggleSet(set)
+        local rs = currentRuleset()
+        if not rs then return end
+        local idx = findSet(rs, set)
+        if idx then tremove(rs.pt31Sets, idx) else tinsert(rs.pt31Sets, set) end
+        commit()
+    end
+
+    local function toggleType(itype, isubtype)
+        local rs = currentRuleset()
+        if not rs then return end
+        local idx = findType(rs, itype, isubtype)
+        if idx then
+            tremove(rs.itemTypes, idx)
+        else
+            tinsert(rs.itemTypes, { type = itype, subtype = isubtype or nil })
+        end
+        commit()
+    end
+
+    local function removeRule(kind, value)
+        local rs = currentRuleset()
+        if not rs then return end
+        local idx
+        if kind == "items" then
+            idx = findItem(rs, value)
+        elseif kind == "pt31Sets" then
+            idx = findSet(rs, value)
+        else
+            idx = findType(rs, value.type, value.subtype)
+        end
+        if idx then
+            tremove(rs[kind], idx)
+            commit()
+        end
+    end
+
+    local function addItemsFromText(text)
+        local rs = currentRuleset()
+        if not rs or not text then return end
+        local ids = {}
+        for id in text:gmatch("item:(%d+)") do ids[#ids + 1] = id end
+        -- strip links so their extra numbers aren't read as IDs, then take plain numbers
+        text = text:gsub("|H.-|h.-|h", " "):gsub("item:[%d:%-]*", " ")
+        for id in text:gmatch("%d+") do ids[#ids + 1] = id end
+        local changed
+        for _, id in ipairs(ids) do
+            id = tonumber(id)
+            if id and id > 0 and not findItem(rs, id) then
+                tinsert(rs.items, id)
+                changed = true
             end
         end
+        if changed then commit() end
     end
 
-    -- Global Exclude Rules
-    y = tooltip:AddLine(_plusminus(shown.globalExclude)..L["Global Exclude"])
-    tooltip:SetLineScript(y, "OnMouseUp", _toggleEditHeader, "globalExclude")
-
-    if shown.globalExclude then
-        _addIndentedCell(tooltip,color(L["Exclude"], "ffd200"), 20, _showmenu, globalExclude)
-        _listRulesQTip(tooltip, globalExclude)
+    local function dropCursorItem()
+        local kind, id = GetCursorInfo()
+        if kind == "item" and id then
+            ClearCursor()
+            addItem(tonumber(id))
+        end
     end
 
-    tooltip:AddLine(" ")
-    tooltip:SetLineScript(tooltip:AddLine(color(L["New Destination"], "ffd200")), "OnMouseUp", newDest)
-    y = tooltip:AddLine(color(L["Close"], "ffd200"))
-    tooltip:SetLineScript(y, "OnMouseUp", _sendEditQueueClose)
+    local function countRules(rs)
+        return #rs.items + #rs.pt31Sets + #rs.itemTypes
+    end
 
-    tooltip:AddLine(" ")
-    y = tooltip:AddLine()
-    tooltip:SetCell(y, 1, color(L["Hint: "]..L["Click Include/Exclude headers to modify a ruleset.  Alt-Click destinations and rules to delete them."], "ffff00"), tooltip:GetFont(), "LEFT", 1, nil, nil, nil, 250)
+    ---------------------------------------------------------------------------
+    -- Display helpers
+    ---------------------------------------------------------------------------
+    local function qualityText(name, quality)
+        local qc = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+        if qc and qc.hex then
+            return qc.hex .. name .. "|r"
+        end
+        return name
+    end
 
-    tooltip:SetFrameStrata("DIALOG")
-    -- set max height to be 90% of the screen height
-    tooltip:UpdateScrolling(UIParent:GetHeight() / tooltip:GetScale() * 0.9)
-    tooltip:SetClampedToScreen(true)
-    tooltip:Show()
+    local function itemDisplay(id)
+        local name, _, quality, _, _, _, _, _, _, icon = GetItemInfo(id)
+        icon = icon or (GetItemIcon and GetItemIcon(id)) or ICON_UNKNOWN
+        if name then
+            return qualityText(name, quality), icon, name
+        end
+        return color("item:" .. id, "808080"), icon
+    end
 
+    local function className(itype)
+        return GetItemClassInfo(itype) or tostring(itype)
+    end
+
+    local function subclassName(itype, isubtype)
+        return GetItemSubClassInfo(itype, isubtype) or tostring(isubtype)
+    end
+
+    local function typeRuleText(itype, isubtype)
+        if isubtype then
+            return className(itype) .. " - " .. subclassName(itype, isubtype)
+        end
+        return fmt(L["All %s"], className(itype))
+    end
+
+    local function matches(text)
+        return not searchFilter or strfind(strlower(text), searchFilter, 1, true) ~= nil
+    end
+
+    local function byText(a, b)
+        return a.sortKey < b.sortKey
+    end
+
+    ---------------------------------------------------------------------------
+    -- Scrolling list widget
+    ---------------------------------------------------------------------------
+    local function rowOnEnter(row)
+        local e = row.entry
+        if not e then return end
+        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+        if e.itemID then
+            GameTooltip:SetHyperlink("item:" .. e.itemID)
+        elseif e.tooltip then
+            e.tooltip(GameTooltip)
+        elseif row.text.IsTruncated and row.text:IsTruncated() then
+            GameTooltip:AddLine(row.text:GetText(), 1, 1, 1)
+        elseif not e.hint then
+            GameTooltip:Hide()
+            return
+        end
+        if e.hint then
+            GameTooltip:AddLine(e.hint, 0, 1, 0)
+        end
+        GameTooltip:Show()
+    end
+
+    local function hideTooltip()
+        GameTooltip:Hide()
+    end
+
+    local function fillRow(row, e)
+        row.entry = e
+        row.text:SetText(e.text or "")
+        if e.icon then
+            row.icon:SetTexture(e.icon)
+            row.icon:Show()
+            row.text:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+        else
+            row.icon:Hide()
+            row.text:SetPoint("LEFT", row, "LEFT", 6, 0)
+        end
+        row.tag:SetText(e.tag or "")
+        local c = e.tagColor
+        if c then
+            row.tag:SetTextColor(c[1], c[2], c[3])
+        else
+            row.tag:SetTextColor(0.6, 0.6, 0.6)
+        end
+        row.check:SetShown(e.checked and true or false)
+        row.remove:SetShown(e.onRemove ~= nil)
+        row.selected:SetShown(e.selected and true or false)
+        row:Show()
+        if GameTooltip:IsOwned(row) then rowOnEnter(row) end
+    end
+
+    local listCount = 0
+    local function createList(parent, rowHeight, numRows)
+        listCount = listCount + 1
+        local list = CreateFrame("Frame", nil, parent)
+        list:SetHeight(rowHeight * numRows)
+        list.items = {}
+        list.rows = {}
+
+        local scroll = CreateFrame("ScrollFrame", "BulkMailRulesEditorList" .. listCount, list, "FauxScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+        scroll:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", -24, 0)
+        scroll:SetScript("OnVerticalScroll", function(self, offset)
+            FauxScrollFrame_OnVerticalScroll(self, offset, rowHeight, function() list:Refresh() end)
+        end)
+        list.scroll = scroll
+        list.scrollBar = _G[scroll:GetName() .. "ScrollBar"]
+
+        list:EnableMouseWheel(true)
+        list:SetScript("OnMouseWheel", function(_, delta)
+            if scroll:IsShown() then
+                list.scrollBar:SetValue(list.scrollBar:GetValue() - delta * rowHeight * 3)
+            end
+        end)
+        list:EnableMouse(true)
+        list:SetScript("OnReceiveDrag", function() if list.onDrop then list.onDrop() end end)
+        list:SetScript("OnMouseUp", function() if list.onDrop and CursorHasItem() then list.onDrop() end end)
+
+        list.empty = list:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+        list.empty:SetPoint("TOPLEFT", list, "TOPLEFT", 8, -12)
+        list.empty:SetPoint("TOPRIGHT", list, "TOPRIGHT", -8, -12)
+        list.empty:SetJustifyH("CENTER")
+
+        for i = 1, numRows do
+            local row = CreateFrame("Button", nil, list)
+            row:SetHeight(rowHeight)
+            row:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -(i - 1) * rowHeight)
+            row:SetPoint("RIGHT", list, "RIGHT", -24, 0)
+            row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+            row:SetHighlightTexture([[Interface\QuestFrame\UI-QuestTitleHighlight]], "ADD")
+
+            row.selected = row:CreateTexture(nil, "BACKGROUND")
+            row.selected:SetAllPoints()
+            row.selected:SetTexture([[Interface\QuestFrame\UI-QuestTitleHighlight]])
+            row.selected:SetBlendMode("ADD")
+            row.selected:SetVertexColor(1, 0.82, 0, 0.7)
+
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(rowHeight - 4, rowHeight - 4)
+            row.icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+            row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+
+            row.remove = CreateFrame("Button", nil, row, "UIPanelCloseButtonNoScripts")
+            row.remove:SetSize(rowHeight, rowHeight)
+            row.remove:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+            row.remove:SetScript("OnClick", function()
+                local e = row.entry
+                if e and e.onRemove then e.onRemove(e) end
+            end)
+            row.remove:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:AddLine(L["Remove"], 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            row.remove:SetScript("OnLeave", hideTooltip)
+
+            row.check = row:CreateTexture(nil, "OVERLAY")
+            row.check:SetTexture([[Interface\Buttons\UI-CheckBox-Check]])
+            row.check:SetSize(rowHeight, rowHeight)
+            row.check:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+
+            row.tag = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+            row.tag:SetPoint("RIGHT", row, "RIGHT", -(rowHeight + 2), 0)
+            row.tag:SetJustifyH("RIGHT")
+
+            row.text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            row.text:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
+            row.text:SetPoint("RIGHT", row.tag, "LEFT", -4, 0)
+            row.text:SetJustifyH("LEFT")
+            row.text:SetWordWrap(false)
+
+            row:SetScript("OnClick", function(self, button)
+                if list.onDrop and CursorHasItem() then
+                    list.onDrop()
+                    return
+                end
+                local e = self.entry
+                if e and e.onClick then e.onClick(e, button) end
+            end)
+            row:SetScript("OnReceiveDrag", function() if list.onDrop then list.onDrop() end end)
+            row:SetScript("OnEnter", rowOnEnter)
+            row:SetScript("OnLeave", hideTooltip)
+            row:Hide()
+            list.rows[i] = row
+        end
+
+        -- items: array of entries, or of raw values when decorate(value) builds
+        -- the entry (only called for visible rows, which keeps huge lists cheap)
+        function list:SetItems(items, decorate, emptyText)
+            self.items = items
+            self.decorate = decorate
+            self.empty:SetText(emptyText or L["None"])
+            self:Refresh()
+        end
+
+        function list:ResetScroll()
+            FauxScrollFrame_SetOffset(scroll, 0)
+            self.scrollBar:SetValue(0)
+        end
+
+        function list:Refresh()
+            if self.refreshing then return end
+            self.refreshing = true
+            local items = self.items
+            local n = #items
+            FauxScrollFrame_Update(scroll, n, numRows, rowHeight)
+            local offset = FauxScrollFrame_GetOffset(scroll)
+            local maxOffset = math.max(0, n - numRows)
+            if offset > maxOffset then
+                offset = maxOffset
+                FauxScrollFrame_SetOffset(scroll, offset)
+            end
+            for i = 1, numRows do
+                local row = self.rows[i]
+                local item = items[i + offset]
+                if item ~= nil then
+                    fillRow(row, self.decorate and self.decorate(item) or item)
+                else
+                    row.entry = nil
+                    row:Hide()
+                end
+            end
+            self.empty:SetShown(n == 0)
+            self.refreshing = nil
+        end
+
+        return list
+    end
+
+    ---------------------------------------------------------------------------
+    -- Widget helpers
+    ---------------------------------------------------------------------------
+    local function createInset(parent)
+        local f = CreateFrame("Frame", nil, parent, BACKDROP_TEMPLATE)
+        if f.SetBackdrop then
+            f:SetBackdrop({
+                bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
+                edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
+                tile = true, tileSize = 16, edgeSize = 12,
+                insets = { left = 3, right = 3, top = 3, bottom = 3 },
+            })
+            f:SetBackdropColor(0, 0, 0, 0.5)
+            f:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+        end
+        return f
+    end
+
+    local function createButton(parent, text, width, onClick)
+        local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        b:SetSize(width, 22)
+        b:SetText(text)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+
+    local function setActive(button, active)
+        if active then
+            button:LockHighlight()
+            button:SetNormalFontObject("GameFontHighlight")
+        else
+            button:UnlockHighlight()
+            button:SetNormalFontObject("GameFontNormal")
+        end
+    end
+
+    local function createInput(parent, width, template)
+        local box = CreateFrame("EditBox", nil, parent, template or "InputBoxTemplate")
+        box:SetSize(width, 20)
+        box:SetAutoFocus(false)
+        box:SetScript("OnEscapePressed", box.ClearFocus)
+        return box
+    end
+
+    local function createLabel(parent, text, font)
+        local fs = parent:CreateFontString(nil, "ARTWORK", font or "GameFontNormal")
+        fs:SetText(text or "")
+        fs:SetJustifyH("LEFT")
+        return fs
+    end
+
+    ---------------------------------------------------------------------------
+    -- List contents
+    ---------------------------------------------------------------------------
+    local function selectDest(e)
+        if selectedDest ~= e.value then
+            selectedDest = e.value
+            editor.ruleList:ResetScroll()
+        end
+        mod:RefreshRulesEditor()
+    end
+
+    local function confirmRemoveDest(e)
+        StaticPopup_Show("BULKMAIL_REMOVE_DESTINATION", nil, nil, e.value)
+    end
+
+    local function refreshDestList()
+        local data = {}
+        local n = countRules(globalExclude)
+        data[1] = {
+            text = color(L["Global Exclude"], "ff7f7f"),
+            icon = [[Interface\Icons\INV_Misc_Lockbox_1]],
+            tag = n > 0 and tostring(n) or nil,
+            value = GLOBAL,
+            selected = selectedDest == GLOBAL,
+            onClick = selectDest,
+            tooltip = function(tt)
+                tt:AddLine(L["Global Exclude"])
+                tt:AddLine(L["Items matching these rules are never auto-sent. Applies to this character only."], 1, 1, 1, true)
+            end,
+        }
+        local default = mod.db.char.defaultDestination
+        default = default and strlower(default)
+        local dests = {}
+        for dest in pairs(destCache) do
+            local rules = autoSendRules[dest]
+            local inc, exc = countRules(rules.include), countRules(rules.exclude)
+            local text = dest
+            if default == strlower(dest) then
+                text = text .. color(" (" .. L["default"] .. ")", "808080")
+            end
+            dests[#dests + 1] = {
+                text = text,
+                sortKey = strlower(dest),
+                tag = exc > 0 and fmt("%d/%d", inc, exc) or tostring(inc),
+                value = dest,
+                selected = selectedDest == dest,
+                onClick = selectDest,
+                onRemove = confirmRemoveDest,
+                tooltip = function(tt)
+                    tt:AddLine(dest)
+                    tt:AddLine(fmt(L["%d include rules, %d exclude rules"], inc, exc), 1, 1, 1)
+                end,
+            }
+        end
+        tsort(dests, byText)
+        for _, e in ipairs(dests) do data[#data + 1] = e end
+        editor.destList:SetItems(data)
+    end
+
+    local function refreshRuleList()
+        local rs = currentRuleset()
+        local data = {}
+        if rs then
+            for _, rule in ipairs(rs.itemTypes) do
+                data[#data + 1] = {
+                    text = typeRuleText(rule.type, rule.subtype),
+                    icon = ICON_TYPE, tag = L["Type"], tagColor = TAG_TYPE,
+                    onRemove = function() removeRule("itemTypes", rule) end,
+                }
+            end
+            for _, set in ipairs(rs.pt31Sets) do
+                data[#data + 1] = {
+                    text = set,
+                    icon = ICON_SET, tag = L["Set"], tagColor = TAG_SET,
+                    onRemove = function() removeRule("pt31Sets", set) end,
+                    tooltip = function(tt)
+                        tt:AddLine(L["Periodic Table Set"])
+                        tt:AddLine(set, 1, 1, 1, true)
+                    end,
+                }
+            end
+            for _, id in ipairs(rs.items) do
+                id = tonumber(id)
+                local text, icon = itemDisplay(id)
+                data[#data + 1] = {
+                    text = text, icon = icon, itemID = id,
+                    tag = L["Item"], tagColor = TAG_ITEM,
+                    onRemove = function() removeRule("items", id) end,
+                }
+            end
+        end
+        editor.ruleList:SetItems(data, nil, L["No rules yet. Drop an item here or pick rules on the right."])
+    end
+
+    local function refreshBagPicker(rs)
+        local data, seen = {}, {}
+        for bag, slot, link in bagIter() do
+            local id = tonumber(strmatch(link, "item:(%d+)"))
+            if id and not seen[id] then
+                seen[id] = true
+                local name, _, quality, _, _, _, _, _, _, icon = GetItemInfo(link)
+                name = name or strmatch(link, "%[(.-)%]") or tostring(id)
+                if matches(name) and isItemMailable(bag, slot) then
+                    data[#data + 1] = {
+                        text = qualityText(name, quality),
+                        sortKey = strlower(name),
+                        icon = icon or GetContainerItemInfo(bag, slot),
+                        itemID = id,
+                        checked = rs and findItem(rs, id) ~= nil,
+                        hint = L["Click to add or remove this rule."],
+                        onClick = function() toggleItem(id) end,
+                    }
+                end
+            end
+        end
+        tsort(data, byText)
+        editor.picker:SetItems(data, nil, L["No mailable items in your bags."])
+    end
+
+    local function typeEntry(rs, itype, isubtype, text)
+        return {
+            text = text, sortKey = strlower(text), icon = ICON_TYPE,
+            checked = rs and findType(rs, itype, isubtype) ~= nil,
+            hint = L["Click to add or remove this rule."],
+            onClick = function() toggleType(itype, isubtype) end,
+        }
+    end
+
+    local function refreshTypePicker(rs)
+        local data = {}
+        if searchFilter then
+            -- flat search across classes and subclasses
+            for itype, subtypes in pairs(auctionItemClasses) do
+                local cname = className(itype)
+                local classMatch = matches(cname)
+                if classMatch then
+                    data[#data + 1] = typeEntry(rs, itype, nil, typeRuleText(itype))
+                end
+                for _, isubtype in ipairs(subtypes) do
+                    local sname = subclassName(itype, isubtype)
+                    if classMatch or matches(sname) then
+                        data[#data + 1] = typeEntry(rs, itype, isubtype, cname .. " - " .. sname)
+                    end
+                end
+            end
+            tsort(data, byText)
+        elseif typeClass and auctionItemClasses[typeClass] then
+            local subs = {}
+            for _, isubtype in ipairs(auctionItemClasses[typeClass]) do
+                subs[#subs + 1] = typeEntry(rs, typeClass, isubtype, subclassName(typeClass, isubtype))
+            end
+            tsort(subs, byText)
+            data[1] = {
+                text = color("< " .. L["Back"], "ffd200"),
+                onClick = function()
+                    typeClass = nil
+                    editor.picker:ResetScroll()
+                    mod:RefreshRulesEditor()
+                end,
+            }
+            data[2] = typeEntry(rs, typeClass, nil, typeRuleText(typeClass))
+            for _, e in ipairs(subs) do data[#data + 1] = e end
+        else
+            for itype, subtypes in pairs(auctionItemClasses) do
+                local cname = className(itype)
+                local e
+                if #subtypes == 0 then
+                    e = typeEntry(rs, itype, nil, cname)
+                else
+                    local count = 0
+                    if rs then
+                        for _, rule in ipairs(rs.itemTypes) do
+                            if rule.type == itype then count = count + 1 end
+                        end
+                    end
+                    e = {
+                        text = cname, sortKey = strlower(cname), icon = ICON_TYPE,
+                        tag = (count > 0 and (count .. " ") or "") .. ">",
+                        onClick = function()
+                            typeClass = itype
+                            editor.picker:ResetScroll()
+                            mod:RefreshRulesEditor()
+                        end,
+                    }
+                end
+                data[#data + 1] = e
+            end
+            tsort(data, byText)
+        end
+        editor.picker:SetItems(data, nil, L["No matches."])
+    end
+
+    -- Periodic Table covers every expansion. On the classic game versions,
+    -- sets with none of their items in this client are left out of the
+    -- picker. Each set is checked once per session.
+    local IS_RETAIL = WOW_PROJECT_ID == nil or WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+    local itemExists = (C_Item and C_Item.DoesItemExistByID)
+        or (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+    local setInGame = {}
+
+    local function isSetInGame(name, depth)
+        if IS_RETAIL or not itemExists then return true end
+        local known = setInGame[name]
+        if known ~= nil then return known end
+        local raw = pt.sets[name]
+        local found = false
+        if raw == false then
+            found = false  -- an empty group PT built on request
+        elseif type(raw) ~= "string" then
+            found = true  -- not loaded yet; keep it
+        elseif strsub(raw, 1, 2) == "m," then
+            if (depth or 0) > 8 then return true end
+            for child in string.gmatch(strsub(raw, 3), "[^,]+") do
+                if child ~= name and isSetInGame(child, (depth or 0) + 1) then
+                    found = true
+                    break
+                end
+            end
+        else
+            for id in string.gmatch(raw, "(%-?%d+)[^,]*") do
+                id = tonumber(id)
+                -- negative ids are spells or enchants, which can't be checked
+                if not id or id <= 0 or itemExists(id) then
+                    found = true
+                    break
+                end
+            end
+        end
+        setInGame[name] = found
+        return found
+    end
+
+    local function getSortedSets()
+        if not sortedSets then
+            sortedSets, sortedSetsLower = {}, {}
+            for name in pairs(pt.sets) do
+                if isSetInGame(name) then
+                    sortedSets[#sortedSets + 1] = name
+                end
+            end
+            tsort(sortedSets)
+            for i, name in ipairs(sortedSets) do
+                sortedSetsLower[i] = strlower(name)
+            end
+        end
+        return sortedSets, sortedSetsLower
+    end
+
+    local function setEntry(rs, name, text)
+        return {
+            text = text, sortKey = strlower(text), icon = ICON_SET,
+            checked = rs and findSet(rs, name) ~= nil,
+            hint = L["Click to add or remove this rule."],
+            tooltip = function(tt)
+                tt:AddLine(L["Periodic Table Set"])
+                tt:AddLine(name, 1, 1, 1, true)
+            end,
+            onClick = function() toggleSet(name) end,
+        }
+    end
+
+    local function browseSets(path)
+        setPath = path
+        editor.picker:ResetScroll()
+        mod:RefreshRulesEditor()
+    end
+
+    -- Sets are browsed by their dotted names, a level at a time, like the
+    -- item types; a search lists matching sets by full name.
+    local function refreshSetPicker(rs)
+        local names, lower = getSortedSets()
+        if searchFilter then
+            local data = {}
+            for i, name in ipairs(names) do
+                if strfind(lower[i], searchFilter, 1, true) then
+                    data[#data + 1] = name
+                end
+            end
+            editor.picker:SetItems(data, function(name)
+                return setEntry(rs, name, name)
+            end, L["No matches."])
+            return
+        end
+
+        local prefix = setPath and (setPath .. ".") or ""
+        local plen = #prefix
+        local children, order = {}, {}
+        for _, name in ipairs(names) do
+            if plen == 0 or strsub(name, 1, plen) == prefix then
+                local rest = strsub(name, plen + 1)
+                local seg = strmatch(rest, "^([^%.]+)")
+                if seg then
+                    local child = children[seg]
+                    if not child then
+                        child = { path = prefix .. seg }
+                        children[seg] = child
+                        order[#order + 1] = seg
+                    end
+                    if rest ~= seg then child.group = true end
+                end
+            end
+        end
+
+        local data = {}
+        for _, seg in ipairs(order) do
+            local child = children[seg]
+            if child.group then
+                local count = 0
+                if rs then
+                    local under = child.path .. "."
+                    for _, v in ipairs(rs.pt31Sets) do
+                        if v == child.path or strsub(v, 1, #under) == under then count = count + 1 end
+                    end
+                end
+                data[#data + 1] = {
+                    text = seg, sortKey = strlower(seg), icon = ICON_SET,
+                    tag = (count > 0 and (count .. " ") or "") .. ">",
+                    tooltip = function(tt) tt:AddLine(child.path) end,
+                    onClick = function() browseSets(child.path) end,
+                }
+            else
+                data[#data + 1] = setEntry(rs, child.path, seg)
+            end
+        end
+        tsort(data, byText)
+
+        if setPath then
+            local top = {
+                {
+                    text = color("< " .. L["Back"], "ffd200"),
+                    onClick = function() browseSets(strmatch(setPath, "^(.+)%.[^%.]+$")) end,
+                },
+            }
+            if pt.sets[setPath] and isSetInGame(setPath) then
+                top[2] = setEntry(rs, setPath, fmt(L["All %s"], strmatch(setPath, "([^%.]+)$")))
+            end
+            for _, e in ipairs(data) do top[#top + 1] = e end
+            data = top
+        end
+        editor.picker:SetItems(data, nil, L["No matches."])
+    end
+
+    local function refreshPicker()
+        local rs = currentRuleset()
+        if pickerMode == "types" then
+            refreshTypePicker(rs)
+        elseif pickerMode == "sets" then
+            refreshSetPicker(rs)
+        else
+            refreshBagPicker(rs)
+        end
+        setActive(editor.modeBags, pickerMode == "bags")
+        setActive(editor.modeTypes, pickerMode == "types")
+        setActive(editor.modeSets, pickerMode == "sets")
+    end
+
+    local function setPickerMode(mode)
+        pickerMode = mode
+        typeClass = nil
+        setPath = nil
+        searchFilter = nil
+        editor.search:SetText("")
+        editor.search:ClearFocus()
+        editor.picker:ResetScroll()
+        refreshPicker()
+    end
+
+    local function setTab(tab)
+        selectedTab = tab
+        editor.ruleList:ResetScroll()
+        mod:RefreshRulesEditor()
+    end
+
+    local function refreshAll()
+        if selectedDest ~= GLOBAL and not (selectedDest and destCache[selectedDest]) then
+            -- pick the first destination alphabetically, or the global list if there are none
+            local first
+            for dest in pairs(destCache) do
+                if not first or strlower(dest) < strlower(first) then first = dest end
+            end
+            selectedDest = first or GLOBAL
+        end
+
+        if selectedDest == GLOBAL then
+            editor.destTitle:SetText(L["Global Exclude"])
+            editor.tabInclude:Hide()
+            editor.tabExclude:Hide()
+            editor.globalNote:Show()
+        else
+            editor.destTitle:SetText(selectedDest)
+            editor.tabInclude:Show()
+            editor.tabExclude:Show()
+            editor.globalNote:Hide()
+            local rules = autoSendRules[selectedDest]
+            editor.tabInclude:SetText(fmt("%s (%d)", L["Include"], countRules(rules.include)))
+            editor.tabExclude:SetText(fmt("%s (%d)", L["Exclude"], countRules(rules.exclude)))
+            setActive(editor.tabInclude, selectedTab == "include")
+            setActive(editor.tabExclude, selectedTab == "exclude")
+        end
+
+        editor.mergeFactions:SetShown(mod:IsCrossFactionMailSupported() and mod.db.realm.shareMode ~= "merged")
+
+        refreshDestList()
+        refreshRuleList()
+        refreshPicker()
+    end
+
+    local function addDestinationFromInput()
+        local box = editor.destInput
+        local name = strmatch(box:GetText() or "", "^%s*(.-)%s*$")
+        if name == "" then return end
+        local existing
+        for dest in pairs(destCache) do
+            if strlower(dest) == strlower(name) then existing = dest break end
+        end
+        if not existing then
+            mod:AddDestination(name)
+        end
+        selectedDest = existing or name
+        selectedTab = "include"
+        box:SetText("")
+        box:ClearFocus()
+        editor.ruleList:ResetScroll()
+        mod:RefreshRulesEditor()
+    end
+
+    ---------------------------------------------------------------------------
+    -- Frame construction
+    ---------------------------------------------------------------------------
+    local refreshPending
+    local function scheduleRefresh()
+        if refreshPending then return end
+        refreshPending = true
+        C_Timer.After(0.25, function()
+            refreshPending = nil
+            if editor and editor:IsShown() then refreshAll() end
+        end)
+    end
+
+    local function createEditor()
+        local f = MagicUtil:CreateDialogWindow("BulkMailRulesEditorFrame", WIDTH, HEIGHT, {
+            title = L["Bulk Mail"] .. " - " .. L["AutoSend Rules"],
+            header = true, closeButton = true, strata = "HIGH", opaque = true,
+        })
+        editor = f
+
+        local top, bottom = -36, 16
+        local paneHeight = HEIGHT + top - bottom
+
+        -- Left: destinations
+        local left = createInset(f)
+        left:SetPoint("TOPLEFT", f, "TOPLEFT", 16, top)
+        left:SetSize(200, paneHeight)
+        local leftTitle = createLabel(left, L["Destinations"])
+        leftTitle:SetPoint("TOPLEFT", left, "TOPLEFT", 10, -10)
+
+        f.mergeFactions = CreateFrame("Button", nil, left, "UIPanelButtonTemplate")
+        f.mergeFactions:SetSize(96, 18)
+        f.mergeFactions:SetPoint("TOPRIGHT", left, "TOPRIGHT", -6, -6)
+        f.mergeFactions:SetText(L["Merge factions"])
+        f.mergeFactions:SetNormalFontObject("GameFontNormalSmall")
+        f.mergeFactions:SetHighlightFontObject("GameFontHighlightSmall")
+        f.mergeFactions:SetScript("OnClick", function() mod:OpenShareWizard(true) end)
+        f.mergeFactions:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(L["Merge factions"])
+            GameTooltip:AddLine(L["Share one set of AutoSend rules between your Alliance and Horde characters on this realm."], 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        f.mergeFactions:SetScript("OnLeave", hideTooltip)
+
+        f.destList = createList(left, 20, 18)
+        f.destList:SetPoint("TOPLEFT", left, "TOPLEFT", 6, -28)
+        f.destList:SetPoint("RIGHT", left, "RIGHT", -6, 0)
+
+        local newLabel = createLabel(left, L["New Destination"], "GameFontNormalSmall")
+        newLabel:SetPoint("BOTTOMLEFT", left, "BOTTOMLEFT", 10, 34)
+        f.destInput = createInput(left, 128, "AutoCompleteEditBoxTemplate,InputBoxTemplate")
+        f.destInput:SetPoint("BOTTOMLEFT", left, "BOTTOMLEFT", 16, 10)
+        if AutoCompleteEditBox_SetAutoCompleteSource and AUTOCOMPLETE_LIST and AUTOCOMPLETE_LIST.MAIL then
+            local box = f.destInput
+            mod:ApplyRecipientAutoComplete(box)
+            mod._destInput = box
+            box.addHighlightedText = true
+            box.autoCompleteContext = "mail"
+            box:SetScript("OnTextChanged", AutoCompleteEditBox_OnTextChanged)
+            box:SetScript("OnTabPressed", function(self) mod:AutoCompleteTab(self) end)
+            box:SetScript("OnEditFocusLost", AutoCompleteEditBox_OnEditFocusLost)
+            box:SetScript("OnEscapePressed", function(self)
+                if not AutoCompleteEditBox_OnEscapePressed(self) then self:ClearFocus() end
+            end)
+            box:SetScript("OnEnterPressed", function(self)
+                if not AutoCompleteEditBox_OnEnterPressed(self) then addDestinationFromInput() end
+            end)
+        else
+            f.destInput:SetScript("OnEnterPressed", addDestinationFromInput)
+        end
+        local addDest = createButton(left, L["Add"], 46, addDestinationFromInput)
+        addDest:SetPoint("LEFT", f.destInput, "RIGHT", 4, 0)
+
+        -- Middle: rules of the selected destination
+        local mid = createInset(f)
+        mid:SetPoint("TOPLEFT", left, "TOPRIGHT", 8, 0)
+        mid:SetSize(300, paneHeight)
+        f.destTitle = createLabel(mid, "", "GameFontNormalLarge")
+        f.destTitle:SetPoint("TOPLEFT", mid, "TOPLEFT", 10, -10)
+        f.destTitle:SetPoint("RIGHT", mid, "RIGHT", -10, 0)
+        f.destTitle:SetWordWrap(false)
+
+        f.tabInclude = createButton(mid, L["Include"], 110, function() setTab("include") end)
+        f.tabInclude:SetPoint("TOPLEFT", mid, "TOPLEFT", 10, -34)
+        f.tabExclude = createButton(mid, L["Exclude"], 110, function() setTab("exclude") end)
+        f.tabExclude:SetPoint("LEFT", f.tabInclude, "RIGHT", 4, 0)
+        f.globalNote = createLabel(mid, L["Items matching these rules are never auto-sent. Applies to this character only."], "GameFontHighlightSmall")
+        f.globalNote:SetPoint("TOPLEFT", mid, "TOPLEFT", 10, -34)
+        f.globalNote:SetPoint("RIGHT", mid, "RIGHT", -10, 0)
+        f.globalNote:SetHeight(24)
+
+        f.ruleList = createList(mid, 22, 15)
+        f.ruleList:SetPoint("TOPLEFT", mid, "TOPLEFT", 6, -62)
+        f.ruleList:SetPoint("RIGHT", mid, "RIGHT", -6, 0)
+        f.ruleList.onDrop = dropCursorItem
+
+        local drop = CreateFrame("Button", nil, mid, BACKDROP_TEMPLATE)
+        drop:SetPoint("BOTTOMLEFT", mid, "BOTTOMLEFT", 8, 8)
+        drop:SetPoint("BOTTOMRIGHT", mid, "BOTTOMRIGHT", -8, 8)
+        drop:SetHeight(40)
+        if drop.SetBackdrop then
+            drop:SetBackdrop({
+                bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
+                edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
+                tile = true, tileSize = 16, edgeSize = 12,
+                insets = { left = 3, right = 3, top = 3, bottom = 3 },
+            })
+            drop:SetBackdropColor(0.2, 0.2, 0.2, 0.6)
+            drop:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+        end
+        drop:SetHighlightTexture([[Interface\QuestFrame\UI-QuestTitleHighlight]], "ADD")
+        local dropText = drop:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        dropText:SetPoint("CENTER")
+        dropText:SetText(L["Drop an item here to add it"])
+        drop:SetScript("OnReceiveDrag", dropCursorItem)
+        drop:SetScript("OnClick", dropCursorItem)
+
+        -- Right: add rule picker
+        local right = createInset(f)
+        right:SetPoint("TOPLEFT", mid, "TOPRIGHT", 8, 0)
+        right:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, bottom)
+        local rightTitle = createLabel(right, L["Add rule"])
+        rightTitle:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -10)
+
+        f.modeBags = createButton(right, L["Bags"], 68, function() setPickerMode("bags") end)
+        f.modeBags:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -30)
+        f.modeTypes = createButton(right, L["Types"], 68, function() setPickerMode("types") end)
+        f.modeTypes:SetPoint("LEFT", f.modeBags, "RIGHT", 2, 0)
+        f.modeSets = createButton(right, L["Sets"], 68, function() setPickerMode("sets") end)
+        f.modeSets:SetPoint("LEFT", f.modeTypes, "RIGHT", 2, 0)
+
+        f.search = createInput(right, 196, "SearchBoxTemplate")
+        f.search:SetPoint("TOPLEFT", right, "TOPLEFT", 16, -58)
+        f.search:SetPoint("RIGHT", right, "RIGHT", -10, 0)
+        f.search:HookScript("OnTextChanged", function(self)
+            local text = strmatch(self:GetText() or "", "^%s*(.-)%s*$")
+            local filter = text ~= "" and strlower(text) or nil
+            if filter ~= searchFilter then
+                searchFilter = filter
+                f.picker:ResetScroll()
+                refreshPicker()
+            end
+        end)
+
+        f.picker = createList(right, 20, 15)
+        f.picker:SetPoint("TOPLEFT", right, "TOPLEFT", 6, -84)
+        f.picker:SetPoint("RIGHT", right, "RIGHT", -6, 0)
+
+        local idLabel = createLabel(right, L["ItemID(s)"], "GameFontNormalSmall")
+        idLabel:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 10, 34)
+        f.idInput = createInput(right, 140)
+        f.idInput:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 16, 10)
+        local function addIDs()
+            addItemsFromText(f.idInput:GetText())
+            f.idInput:SetText("")
+            f.idInput:ClearFocus()
+        end
+        f.idInput:SetScript("OnEnterPressed", addIDs)
+        local addID = createButton(right, L["Add"], 46, addIDs)
+        addID:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", -10, 9)
+        f.idInput:SetPoint("RIGHT", addID, "LEFT", -6, 0)
+
+        f:SetScript("OnShow", function(self)
+            sortedSets, sortedSetsLower = nil, nil  -- pick up LoD PT sets
+            self:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+            self:RegisterEvent("BAG_UPDATE")
+        end)
+        f:SetScript("OnHide", function(self)
+            self:UnregisterAllEvents()
+            if f.destInput:HasFocus() then f.destInput:ClearFocus() end
+        end)
+        f:SetScript("OnEvent", scheduleRefresh)
+        f:Hide()
+    end
+
+    ---------------------------------------------------------------------------
+    -- Cross-faction rule sharing (retail only)
+    --
+    -- Rules normally live per faction and realm (db.factionrealm). Retail can
+    -- mail across factions, so there the rules can instead live in db.realm,
+    -- shared by every character on the realm. db.realm.shareMode records the
+    -- choice: nil (not decided), "merged" or "separate".
+    ---------------------------------------------------------------------------
+    local CROSS_FACTION_MAIL = WOW_PROJECT_ID ~= nil and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+    local FACTION_COLORS = { Alliance = "4a9eff", Horde = "ff4a4a" }
+    local FACTIONS = { "Alliance", "Horde" }
+    local RULE_KINDS = { "itemTypes", "pt31Sets", "items" }
+    local SIDES = { "include", "exclude" }
+    local sharePending, shareDeferred
+    local wizard, wizardPlan
+
+    local function factionText(faction)
+        local name = faction
+        if faction == "Alliance" then
+            name = FACTION_ALLIANCE or faction
+        elseif faction == "Horde" then
+            name = FACTION_HORDE or faction
+        end
+        return color(name, FACTION_COLORS[faction] or "aaaaaa")
+    end
+
+    local function ruleKey(kind, v)
+        if kind == "items" then
+            return "i:" .. tostring(tonumber(v) or v)
+        elseif kind == "pt31Sets" then
+            return "s:" .. tostring(v)
+        end
+        return "t:" .. tostring(v.type) .. ":" .. tostring(v.subtype or "*")
+    end
+
+    local function copyRule(kind, v)
+        if kind == "items" then
+            return tonumber(v) or v
+        elseif kind == "itemTypes" then
+            return { type = v.type, subtype = v.subtype or nil }
+        end
+        return v
+    end
+
+    local function emptyRuleset()
+        return { items = {}, pt31Sets = {}, itemTypes = {} }
+    end
+
+    local function removeKey(rs, kind, key)
+        local list = rs[kind]
+        for i = #list, 1, -1 do
+            if ruleKey(kind, list[i]) == key then tremove(list, i) end
+        end
+    end
+
+    local function hasKey(rs, kind, key)
+        for _, v in ipairs(rs[kind]) do
+            if ruleKey(kind, v) == key then return true end
+        end
+    end
+
+    -- Raw saved rules may lack empty subtables (AceDB strips defaults), so
+    -- every access goes through this.
+    local function rawRules(rules, side, kind)
+        local rs = type(rules) == "table" and rules[side]
+        local list = type(rs) == "table" and rs[kind]
+        return type(list) == "table" and list or {}
+    end
+
+    local function countDest(rules)
+        local n = 0
+        for _, side in ipairs(SIDES) do
+            for _, kind in ipairs(RULE_KINDS) do
+                n = n + #rawRules(rules, side, kind)
+            end
+        end
+        return n
+    end
+
+    -- Every faction's rule store on this realm that has any destinations.
+    local function factionSources()
+        local sources = {}
+        local suffix = " - " .. mod.db.keys.realm
+        local all = mod.db.sv.factionrealm
+        if type(all) == "table" then
+            for key, data in pairs(all) do
+                if key:sub(-#suffix) == suffix and type(data) == "table" and type(data.autoSendRules) == "table" then
+                    local dests, count = 0, 0
+                    for _, rules in pairs(data.autoSendRules) do
+                        if type(rules) == "table" then
+                            dests = dests + 1
+                            count = count + countDest(rules)
+                        end
+                    end
+                    if dests > 0 then
+                        sources[#sources + 1] = {
+                            faction = key:sub(1, -#suffix - 1), key = key,
+                            rules = data.autoSendRules, dests = dests, count = count,
+                        }
+                    end
+                end
+            end
+        end
+        tsort(sources, function(a, b) return a.faction < b.faction end)
+        return sources
+    end
+
+    local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+
+    local function destNamesSorted(merged)
+        local names = {}
+        for dest in pairs(merged) do names[#names + 1] = dest end
+        tsort(names)
+        return names
+    end
+
+    local function sortedFactions(set)
+        local list = {}
+        for f in pairs(set or {}) do list[#list + 1] = f end
+        tsort(list)
+        return list
+    end
+
+    -- true when the two rules don't both come from the same single faction
+    local function spansFactions(a, b)
+        local n, all = 0, {}
+        for f in pairs(a or {}) do if not all[f] then all[f] = true n = n + 1 end end
+        for f in pairs(b or {}) do if not all[f] then all[f] = true n = n + 1 end end
+        return n > 1
+    end
+
+    -- does rule `broad` match everything rule `narrow` matches?
+    local function covers(broad, narrow)
+        if broad.kind == "items" then return false end
+        if narrow.kind == "items" then
+            local id = tonumber(narrow.value)
+            if not id then return false end
+            if broad.kind == "pt31Sets" then
+                local ok, inSet = pcall(pt.ItemInSet, pt, id, broad.value)
+                return ok and inSet and true or false
+            end
+            if not GetItemInfoInstant then return false end
+            local classID, subclassID = select(6, GetItemInfoInstant(id))
+            if classID ~= broad.value.type then return false end
+            return broad.value.subtype == nil or broad.value.subtype == subclassID
+        elseif narrow.kind == "itemTypes" and broad.kind == "itemTypes" then
+            return broad.value.subtype == nil and narrow.value.subtype ~= nil
+                    and broad.value.type == narrow.value.type
+        end
+        return false
+    end
+
+    local function overlapConflict(narrow, broad, playerFaction)
+        local narrowWins = {
+            dest = narrow.dest, factions = sortedFactions(narrow.factions),
+            -- broad destination stops matching the narrower thing
+            apply = function(m)
+                local ex = m[broad.dest].exclude
+                if narrow.kind == "items" then
+                    if not hasKey(ex, "items", narrow.key) then tinsert(ex.items, tonumber(narrow.value)) end
+                elseif not hasKey(ex, "itemTypes", narrow.key) then
+                    tinsert(ex.itemTypes, { type = narrow.value.type, subtype = narrow.value.subtype })
+                end
+            end,
+        }
+        local broadWins = {
+            dest = broad.dest, factions = sortedFactions(broad.factions),
+            apply = function(m) removeKey(m[narrow.dest].include, narrow.kind, narrow.key) end,
+        }
+        local options = { narrowWins, broadWins }
+        tsort(options, function(a, b) return a.dest < b.dest end)
+        local choice = 1
+        for i, opt in ipairs(options) do
+            for _, f in ipairs(opt.factions) do
+                if f == playerFaction then choice = i end
+            end
+        end
+        return {
+            type = "dest", overlap = true, key = narrow.key, kind = narrow.kind, value = narrow.value,
+            broadKind = broad.kind, broadValue = broad.value,
+            options = options, choice = choice,
+        }
+    end
+
+    -- Union of all sources, plus the conflicts that only appear because two
+    -- factions disagree (overlaps within one faction are left as they were).
+    local function buildMergePlan(sources)
+        local merged, seen = {}, {}
+        local ruleInfo = {}     -- key -> { kind, value }
+        local incDests = {}     -- key -> destinations including it, in order
+        local factionsBy = {}   -- dest -> side -> key -> { faction = true }
+
+        for _, src in ipairs(sources) do
+            for dest, rules in pairs(src.rules) do
+                if type(rules) == "table" then
+                    local m = merged[dest]
+                    if not m then
+                        m = { include = emptyRuleset(), exclude = emptyRuleset() }
+                        merged[dest] = m
+                        seen[dest] = { include = {}, exclude = {} }
+                        factionsBy[dest] = { include = {}, exclude = {} }
+                    end
+                    for _, side in ipairs(SIDES) do
+                        for _, kind in ipairs(RULE_KINDS) do
+                            for _, v in ipairs(rawRules(rules, side, kind)) do
+                                local key = ruleKey(kind, v)
+                                if not seen[dest][side][key] then
+                                    seen[dest][side][key] = true
+                                    tinsert(m[side][kind], copyRule(kind, v))
+                                    ruleInfo[key] = ruleInfo[key] or { kind = kind, value = copyRule(kind, v) }
+                                    if side == "include" then
+                                        incDests[key] = incDests[key] or {}
+                                        tinsert(incDests[key], dest)
+                                    end
+                                end
+                                local fset = factionsBy[dest][side]
+                                fset[key] = fset[key] or {}
+                                fset[key][src.faction] = true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        local playerFaction = UnitFactionGroup("player")
+        local conflicts = {}
+
+        -- same rule included for different destinations by different factions
+        local keys = {}
+        for key, dests in pairs(incDests) do
+            if #dests > 1 then keys[#keys + 1] = key end
+        end
+        tsort(keys)
+        for _, key in ipairs(keys) do
+            local dests = incDests[key]
+            tsort(dests)
+            local allFactions, options, choice = {}, {}, nil
+            for i, dest in ipairs(dests) do
+                local factions = {}
+                for f in pairs(factionsBy[dest].include[key]) do
+                    factions[#factions + 1] = f
+                    allFactions[f] = true
+                end
+                tsort(factions)
+                options[i] = { dest = dest, factions = factions }
+                if not choice and factionsBy[dest].include[key][playerFaction] then choice = i end
+            end
+            local nFactions = 0
+            for _ in pairs(allFactions) do nFactions = nFactions + 1 end
+            if nFactions > 1 then
+                local info = ruleInfo[key]
+                for _, opt in ipairs(options) do
+                    -- winner keeps the rule, everyone else loses it
+                    opt.apply = function(m)
+                        for _, o in ipairs(options) do
+                            if o.dest ~= opt.dest then removeKey(m[o.dest].include, info.kind, key) end
+                        end
+                    end
+                end
+                conflicts[#conflicts + 1] = {
+                    type = "dest", key = key, kind = info.kind, value = info.value,
+                    options = options, choice = choice or 1,
+                }
+            end
+        end
+
+        -- overlapping rules: a broader rule (whole class, subclass, PT set) for
+        -- one destination covers a narrower rule (subclass, item) for another.
+        -- Set vs set and set vs type overlaps aren't detected.
+        local includes = {}  -- { dest, key, kind, value, factions }
+        for _, dest in ipairs(destNamesSorted(merged)) do
+            for _, kind in ipairs(RULE_KINDS) do
+                for _, v in ipairs(merged[dest].include[kind]) do
+                    local key = ruleKey(kind, v)
+                    includes[#includes + 1] = { dest = dest, key = key, kind = kind, value = v, factions = factionsBy[dest].include[key] }
+                end
+            end
+        end
+        local seenOverlap = {}
+        for _, narrow in ipairs(includes) do
+            for _, broad in ipairs(includes) do
+                if narrow.dest ~= broad.dest and narrow.key ~= broad.key
+                        and spansFactions(narrow.factions, broad.factions)
+                        and covers(broad, narrow) then
+                    local id = narrow.key .. "|" .. narrow.dest .. "|" .. broad.dest
+                    if not seenOverlap[id] then
+                        seenOverlap[id] = true
+                        conflicts[#conflicts + 1] = overlapConflict(narrow, broad, playerFaction)
+                    end
+                end
+            end
+        end
+
+        -- one faction includes a rule for a destination that another excludes
+        local destNames = {}
+        for dest in pairs(merged) do destNames[#destNames + 1] = dest end
+        tsort(destNames)
+        for _, dest in ipairs(destNames) do
+            for _, kind in ipairs(RULE_KINDS) do
+                for _, v in ipairs(merged[dest].exclude[kind]) do
+                    local key = ruleKey(kind, v)
+                    local inc = factionsBy[dest].include[key]
+                    local exc = factionsBy[dest].exclude[key]
+                    local disagree = false
+                    for f in pairs(inc or {}) do
+                        if not exc[f] then disagree = true end
+                    end
+                    if disagree then
+                        conflicts[#conflicts + 1] = {
+                            type = "side", dest = dest, key = key, kind = kind, value = v,
+                            options = { { side = "include" }, { side = "exclude" } },
+                            choice = 2,  -- exclusions win today, so keep that by default
+                        }
+                    end
+                end
+            end
+        end
+
+        return { merged = merged, conflicts = conflicts, sources = sources }
+    end
+
+    local function notifyOptions()
+        local registry = LibStub("AceConfigRegistry-3.0", true)
+        if registry then registry:NotifyChange(L["Bulk Mail"] .. VERSION) end
+    end
+
+    function mod:SelectRuleStore()
+        if CROSS_FACTION_MAIL and self.db.realm.shareMode == "merged" then
+            autoSendRules = self.db.realm.autoSendRules
+        else
+            autoSendRules = self.db.factionrealm.autoSendRules
+        end
+        wipe(destCache)
+        wipe(reverseDestCache)
+        for dest in pairs(autoSendRules) do
+            destCache[dest] = true
+            tinsert(reverseDestCache, dest)
+        end
+        rulesAltered = true
+    end
+
+    -- Writes the merged rules to the realm store. The per-faction stores are
+    -- left untouched as a backup.
+    local function applyMergePlan(plan)
+        local merged = plan.merged
+        for _, c in ipairs(plan.conflicts) do
+            if c.type == "dest" then
+                c.options[c.choice].apply(merged)
+            end
+        end
+        for _, c in ipairs(plan.conflicts) do
+            if c.type == "side" then
+                local m = merged[c.dest]
+                if c.options[c.choice].side == "exclude" then
+                    removeKey(m.include, c.kind, c.key)
+                elseif hasKey(m.include, c.kind, c.key) then
+                    removeKey(m.exclude, c.kind, c.key)
+                end
+            end
+        end
+        local store = mod.db.realm.autoSendRules
+        for dest in pairs(store) do store[dest] = nil end
+        for dest, m in pairs(merged) do store[dest] = m end
+        mod.db.realm.shareMode = "merged"
+        sharePending = nil
+        mod:SelectRuleStore()
+        mod:RefreshRulesEditor()
+        notifyOptions()
+    end
+
+    -- Called at load: with no rules anywhere there is nothing to decide, so
+    -- start out shared. Otherwise the wizard asks (even when only one faction
+    -- has rules, since merging makes the other faction start using them).
+    function mod:CheckFactionSharing()
+        sharePending = nil
+        if not CROSS_FACTION_MAIL or self.db.realm.shareMode then return end
+        local sources = factionSources()
+        if #sources == 0 then
+            applyMergePlan(buildMergePlan(sources))
+        else
+            sharePending = true
+        end
+    end
+
+    function mod:IsShareDecisionPending()
+        return sharePending
+    end
+
+    function mod:IsCrossFactionMailSupported()
+        return CROSS_FACTION_MAIL
+    end
+
+    -- Go back to one rule set per faction; every faction gets a copy of the
+    -- shared rules so nobody loses anything.
+    function mod:StopSharingRules()
+        if self.db.realm.shareMode ~= "merged" then return end
+        local shared = self.db.realm.autoSendRules
+        local realm = self.db.keys.realm
+        local targets = { [self.db.keys.factionrealm] = true }
+        for _, faction in ipairs(FACTIONS) do targets[faction .. " - " .. realm] = true end
+        for key in pairs(targets) do
+            local copy = {}
+            for dest, rules in pairs(shared) do
+                local c = { include = emptyRuleset(), exclude = emptyRuleset() }
+                for _, side in ipairs(SIDES) do
+                    for _, kind in ipairs(RULE_KINDS) do
+                        for _, v in ipairs(rawRules(rules, side, kind)) do
+                            tinsert(c[side][kind], copyRule(kind, v))
+                        end
+                    end
+                end
+                copy[dest] = c
+            end
+            if key == self.db.keys.factionrealm then
+                local store = self.db.factionrealm.autoSendRules
+                for dest in pairs(store) do store[dest] = nil end
+                for dest, c in pairs(copy) do store[dest] = c end
+            else
+                local all = self.db.sv.factionrealm
+                all[key] = type(all[key]) == "table" and all[key] or {}
+                all[key].autoSendRules = copy
+            end
+        end
+        for dest in pairs(shared) do shared[dest] = nil end
+        self.db.realm.shareMode = "separate"
+        sharePending = nil
+        self:SelectRuleStore()
+        self:RefreshRulesEditor()
+        notifyOptions()
+    end
+
+    ---------------------------------------------------------------------------
+    -- Share wizard
+    ---------------------------------------------------------------------------
+    local function plainRuleText(kind, value)
+        if kind == "items" then
+            local text, icon = itemDisplay(tonumber(value))
+            return text, icon
+        elseif kind == "pt31Sets" then
+            return value, ICON_SET
+        end
+        return typeRuleText(value.type, value.subtype), ICON_TYPE
+    end
+
+    local function conflictRuleText(c)
+        local text, icon = plainRuleText(c.kind, c.value)
+        if c.overlap then
+            text = text .. color(" " .. fmt(L["(in %s)"], (plainRuleText(c.broadKind, c.broadValue))), "808080")
+        end
+        return text, icon
+    end
+
+    local function optionLabel(c, opt)
+        if c.type == "side" then
+            return opt.side == "include" and fmt(L["Send to %s"], c.dest) or fmt(L["Don't send to %s"], c.dest)
+        end
+        local f = {}
+        for i, faction in ipairs(opt.factions) do f[i] = factionText(faction) end
+        return opt.dest .. " (" .. tconcat(f, ", ") .. ")"
+    end
+
+    local function finishWizard(openEditor)
+        wizard.decided = true
+        wizard:Hide()
+        if openEditor then mod:OpenRulesEditor() end
+    end
+
+    local refreshWizard
+
+    local function wizardMerge()
+        local nConflicts = #wizardPlan.conflicts
+        applyMergePlan(wizardPlan)
+        local dests = 0
+        for _ in pairs(wizardPlan.merged) do dests = dests + 1 end
+        mod:Print(fmt(L["AutoSend rules merged: %d destinations, %d conflicts resolved. All your characters on this realm now share them."], dests, nConflicts))
+        finishWizard(wizard.openEditorAfter)
+    end
+
+    local function cycleChoice(c, step)
+        c.choice = (c.choice - 1 + step) % #c.options + 1
+        refreshWizard()
+    end
+
+    local function preferDest(e)
+        for _, c in ipairs(wizardPlan.conflicts) do
+            if c.type == "dest" then
+                for i, opt in ipairs(c.options) do
+                    if opt.dest == e.value then c.choice = i end
+                end
+            end
+        end
+        refreshWizard()
+    end
+
+    function refreshWizard()
+        local plan = wizardPlan
+        local conflicts = plan.conflicts
+
+        -- intro page: what each faction has
+        local summary = {}
+        for _, src in ipairs(plan.sources) do
+            summary[#summary + 1] = {
+                text = factionText(src.faction),
+                tag = fmt(L["%d destinations, %d rules"], src.dests, src.count),
+            }
+            local names = {}
+            for dest, rules in pairs(src.rules) do
+                if type(rules) == "table" then names[#names + 1] = dest end
+            end
+            tsort(names)
+            for _, dest in ipairs(names) do
+                summary[#summary + 1] = { text = "    " .. dest, tag = tostring(countDest(src.rules[dest])) }
+            end
+        end
+        wizard.summary:SetItems(summary)
+        if #conflicts > 0 then
+            wizard.introNote:SetText(fmt(L["%d rules conflict between your factions. You'll choose how to resolve them on the next page."], #conflicts))
+            wizard.mergeButton:SetText(L["Next"])
+        else
+            wizard.introNote:SetText(L["No conflicts found. The rules can be merged as they are."])
+            wizard.mergeButton:SetText(L["Merge rules"])
+        end
+
+        -- conflict page: destinations to prefer, and each conflicting rule
+        local involved, order = {}, {}
+        for _, c in ipairs(conflicts) do
+            if c.type == "dest" then
+                for i, opt in ipairs(c.options) do
+                    local d = involved[opt.dest]
+                    if not d then
+                        d = { total = 0, wins = 0, factions = {} }
+                        involved[opt.dest] = d
+                        order[#order + 1] = opt.dest
+                    end
+                    d.total = d.total + 1
+                    if c.choice == i then d.wins = d.wins + 1 end
+                    for _, f in ipairs(opt.factions) do d.factions[f] = true end
+                end
+            end
+        end
+        tsort(order, function(a, b) return strlower(a) < strlower(b) end)
+        local destData = {}
+        for _, dest in ipairs(order) do
+            local d = involved[dest]
+            local f = {}
+            for faction in pairs(d.factions) do f[#f + 1] = factionText(faction) end
+            tsort(f)
+            destData[#destData + 1] = {
+                text = dest, value = dest,
+                tag = fmt("%d/%d", d.wins, d.total),
+                selected = d.wins == d.total,
+                hint = L["Click to send every conflicting rule to this character."],
+                tooltip = function(tt)
+                    tt:AddLine(dest)
+                    tt:AddLine(tconcat(f, ", "))
+                    tt:AddLine(fmt(L["Gets %d of the %d conflicting rules it is set up for."], d.wins, d.total), 1, 1, 1)
+                end,
+                onClick = preferDest,
+            }
+        end
+        wizard.destList:SetItems(destData, nil, L["None"])
+
+        local ruleData = {}
+        for _, c in ipairs(conflicts) do
+            local text, icon = conflictRuleText(c)
+            local choice = c.options[c.choice]
+            local tag
+            if c.type == "side" then
+                text = text .. color(" - " .. c.dest, "808080")
+                tag = choice.side == "include" and color(L["Send"], "40ff40") or color(L["Don't send"], "ff6060")
+            else
+                tag = color(choice.dest, "40ff40")
+            end
+            ruleData[#ruleData + 1] = {
+                text = text, icon = icon, tag = tag,
+                hint = L["Click for the next choice, right-click for the previous one."],
+                tooltip = function(tt)
+                    tt:AddLine(text)
+                    for i, opt in ipairs(c.options) do
+                        if i == c.choice then
+                            tt:AddLine("> " .. optionLabel(c, opt), 0.25, 1, 0.25)
+                        else
+                            tt:AddLine("   " .. optionLabel(c, opt), 0.8, 0.8, 0.8)
+                        end
+                    end
+                end,
+                onClick = function(_, button) cycleChoice(c, button == "RightButton" and -1 or 1) end,
+            }
+        end
+        wizard.ruleList:SetItems(ruleData)
+    end
+
+    local function showWizardPage(page)
+        wizard.intro:SetShown(page == "intro")
+        wizard.resolve:SetShown(page == "resolve")
+        refreshWizard()
+    end
+
+    local function createWizard()
+        local f = MagicUtil:CreateDialogWindow("BulkMailShareWizardFrame", 600, 460, {
+            title = L["Share AutoSend rules between factions"],
+            header = true, closeButton = true, strata = "HIGH", opaque = true,
+        })
+        wizard = f
+
+        -- Page 1: overview
+        local intro = CreateFrame("Frame", nil, f)
+        intro:SetAllPoints()
+        f.intro = intro
+        local introText = createLabel(intro, L["On retail you can mail items between your Alliance and Horde characters. BulkMail can use one shared set of AutoSend rules for all your characters on this realm, instead of a separate set per faction."], "GameFontHighlight")
+        introText:SetPoint("TOPLEFT", f, "TOPLEFT", 24, -36)
+        introText:SetPoint("RIGHT", f, "RIGHT", -24, 0)
+
+        local summaryInset = createInset(intro)
+        summaryInset:SetPoint("TOPLEFT", f, "TOPLEFT", 24, -96)
+        summaryInset:SetPoint("RIGHT", f, "RIGHT", -24, 0)
+        summaryInset:SetHeight(232)
+        local summaryTitle = createLabel(summaryInset, L["Current rules"])
+        summaryTitle:SetPoint("TOPLEFT", summaryInset, "TOPLEFT", 10, -8)
+        f.summary = createList(summaryInset, 20, 10)
+        f.summary:SetPoint("TOPLEFT", summaryInset, "TOPLEFT", 6, -26)
+        f.summary:SetPoint("RIGHT", summaryInset, "RIGHT", -6, 0)
+
+        f.introNote = createLabel(intro, "", "GameFontNormal")
+        f.introNote:SetPoint("TOPLEFT", summaryInset, "BOTTOMLEFT", 0, -10)
+        f.introNote:SetPoint("RIGHT", f, "RIGHT", -24, 0)
+
+        local keep = createButton(intro, L["Keep separate"], 130, function()
+            mod.db.realm.shareMode = "separate"
+            sharePending = nil
+            notifyOptions()
+            mod:Print(L["AutoSend rules stay separate per faction. Use Merge factions in the rules editor to merge them later."])
+            finishWizard(f.openEditorAfter)
+        end)
+        keep:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 24, 20)
+        local later = createButton(intro, L["Decide later"], 130, function()
+            shareDeferred = true
+            finishWizard(f.openEditorAfter)
+        end)
+        later:SetPoint("LEFT", keep, "RIGHT", 6, 0)
+        f.mergeButton = createButton(intro, L["Merge rules"], 150, function()
+            if #wizardPlan.conflicts > 0 then
+                showWizardPage("resolve")
+            else
+                wizardMerge()
+            end
+        end)
+        f.mergeButton:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -24, 20)
+
+        -- Page 2: conflicts
+        local resolve = CreateFrame("Frame", nil, f)
+        resolve:SetAllPoints()
+        f.resolve = resolve
+        local resolveText = createLabel(resolve, L["These rules send the same items to different characters, but an item can only go to one of them. Click a rule to change its destination, or click a character on the left to send every conflicting rule there."], "GameFontHighlight")
+        resolveText:SetPoint("TOPLEFT", f, "TOPLEFT", 24, -36)
+        resolveText:SetPoint("RIGHT", f, "RIGHT", -24, 0)
+
+        local left = createInset(resolve)
+        left:SetPoint("TOPLEFT", f, "TOPLEFT", 24, -96)
+        left:SetSize(180, 290)
+        local leftTitle = createLabel(left, L["Send all to"])
+        leftTitle:SetPoint("TOPLEFT", left, "TOPLEFT", 10, -8)
+        f.destList = createList(left, 20, 12)
+        f.destList:SetPoint("TOPLEFT", left, "TOPLEFT", 6, -26)
+        f.destList:SetPoint("RIGHT", left, "RIGHT", -6, 0)
+
+        local right = createInset(resolve)
+        right:SetPoint("TOPLEFT", left, "TOPRIGHT", 8, 0)
+        right:SetPoint("RIGHT", f, "RIGHT", -24, 0)
+        right:SetHeight(290)
+        local rightTitle = createLabel(right, L["Conflicting rules"])
+        rightTitle:SetPoint("TOPLEFT", right, "TOPLEFT", 10, -8)
+        f.ruleList = createList(right, 22, 11)
+        f.ruleList:SetPoint("TOPLEFT", right, "TOPLEFT", 6, -26)
+        f.ruleList:SetPoint("RIGHT", right, "RIGHT", -6, 0)
+
+        local back = createButton(resolve, L["Back"], 130, function() showWizardPage("intro") end)
+        back:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 24, 20)
+        f.resolveMerge = createButton(resolve, L["Merge rules"], 150, wizardMerge)
+        f.resolveMerge:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -24, 20)
+
+        f:Hide()
+        -- set after the initial Hide so creating the frame doesn't count as a
+        -- choice. Closing without choosing (X, ESC) asks again next login.
+        f:SetScript("OnHide", function()
+            f:UnregisterAllEvents()
+            if not f.decided then shareDeferred = true end
+        end)
+        f:SetScript("OnShow", function() f:RegisterEvent("GET_ITEM_INFO_RECEIVED") end)
+        local pending
+        f:SetScript("OnEvent", function()
+            if pending then return end
+            pending = true
+            C_Timer.After(0.25, function()
+                pending = nil
+                if f:IsShown() and wizardPlan then refreshWizard() end
+            end)
+        end)
+    end
+
+    -- Offer to merge this realm's per-faction rules. With no rules anywhere
+    -- there is nothing to decide, so it merges right away.
+    function mod:OpenShareWizard(openEditorAfter)
+        if not CROSS_FACTION_MAIL or self.db.realm.shareMode == "merged" then
+            if openEditorAfter then self:OpenRulesEditor() end
+            return
+        end
+        local sources = factionSources()
+        if #sources == 0 then
+            applyMergePlan(buildMergePlan(sources))
+            self:Print(L["AutoSend rules are now shared by all your characters on this realm."])
+            if openEditorAfter then self:OpenRulesEditor() end
+            return
+        end
+        wizardPlan = buildMergePlan(sources)
+        if not wizard then createWizard() end
+        wizard.decided = nil
+        wizard.openEditorAfter = openEditorAfter
+        wizard:Show()
+        wizard:Raise()
+        showWizardPage("intro")
+    end
+
+    function mod:RefreshRulesEditor()
+        if rulesAltered and mailIsVisible then
+            sendCacheCleanup(true)
+            rulesCacheBuild()
+            sendCacheBuild(SendMailNameEditBox:GetText())
+        end
+        if editor and editor:IsShown() then
+            refreshAll()
+        end
+    end
+
+    function mod:OpenRulesEditor()
+        if sharePending and not shareDeferred then
+            mod:OpenShareWizard(true)
+            return
+        end
+        if not editor then createEditor() end
+        editor:Show()
+        editor:Raise()
+        refreshAll()
+    end
+
+    function mod:ToggleRulesEditor()
+        if editor and editor:IsShown() then
+            editor:Hide()
+        else
+            mod:OpenRulesEditor()
+        end
+    end
+
+    -- old names, in case anything external still calls them
+    mod.OpenEditTooltipGUI = mod.OpenRulesEditor
+    mod.RefreshEditTooltipGUI = mod.RefreshRulesEditor
 end
+setupRulesEditor()
 
 --[[----------------------------------------------------------------------------
 QTip Windows -- Send Queue Edit GUI
@@ -1766,12 +3513,34 @@ local function _createOrAttachRecipientBar(tooltip)
         label:SetText(L["To"]..": ")
         label:SetPoint("LEFT", bar, "LEFT", 8, 0)
 
+        -- Switches the suggestions between your own characters and everyone.
+        local ownOnly = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
+        ownOnly:SetSize(22, 22)
+        local ownLabel = ownOnly.Text or ownOnly.text or ownOnly:CreateFontString(nil, "ARTWORK")
+        ownLabel:SetFontObject("GameFontHighlightSmall")
+        ownLabel:ClearAllPoints()
+        ownLabel:SetPoint("RIGHT", bar, "RIGHT", -8, 0)
+        ownLabel:SetText(L["Mine only"])
+        ownOnly:SetPoint("RIGHT", ownLabel, "LEFT", 0, 0)
+        ownOnly:SetChecked(mod.db.profile.ownCharactersOnly)
+        ownOnly:SetScript("OnClick", function(self)
+            mod:SetOwnCharactersOnly(self:GetChecked())
+        end)
+        ownOnly:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(L["Only suggest my characters"])
+            GameTooltip:AddLine(L["Limit name suggestions in the mail To: field to your own characters and AutoSend destinations."], 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        ownOnly:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        bar.ownOnly = ownOnly
+
         local editBox = CreateFrame("EditBox", "BulkMailRecipientEditBox", bar, "AutoCompleteEditBoxTemplate,InputBoxTemplate")
         editBox:SetHeight(20)
         editBox:SetPoint("LEFT", label, "RIGHT", 5, 0)
-        editBox:SetPoint("RIGHT", bar, "RIGHT", -8, 0)
+        editBox:SetPoint("RIGHT", ownOnly, "LEFT", -4, 0)
         editBox:SetAutoFocus(false)
-        AutoCompleteEditBox_SetAutoCompleteSource(editBox, GetAutoCompleteResults, AUTOCOMPLETE_LIST.MAIL.include, AUTOCOMPLETE_LIST.MAIL.exclude)
+        mod:ApplyRecipientAutoComplete(editBox)
         editBox.addHighlightedText = true
         editBox.autoCompleteContext = "mail"
 
@@ -1785,7 +3554,7 @@ local function _createOrAttachRecipientBar(tooltip)
             sendCacheBuild(sendDest)
         end)
         editBox:SetScript("OnTabPressed", function(self)
-            AutoCompleteEditBox_OnTabPressed(self)
+            mod:AutoCompleteTab(self)
         end)
         editBox:SetScript("OnEditFocusLost", function(self)
             AutoCompleteEditBox_OnEditFocusLost(self)
@@ -1976,43 +3745,14 @@ end
 --[[----------------------------------------------------------------------------
 StaticPopups
 ------------------------------------------------------------------------------]]
-StaticPopupDialogs['BULKMAIL_ADD_DESTINATION'] = {
-    text = L["BulkMail - New AutoSend Destination"],
-    button1 = L["Accept"], button2 = L["Cancel"],
-    hasEditBox = 1, maxLetters = 20,
-    OnAccept = function(self)
-        mod:AddDestination(_G[self:GetName().."EditBox"]:GetText())
-        mod:RefreshEditTooltipGUI()
-    end,
-    OnShow = function(self)
-        _G[self:GetName().."EditBox"]:SetFocus()
-    end,
-    OnHide = function(self)
-        local activeWindow = ChatEdit_GetActiveWindow();
-        if ( activeWindow ) then
-            activeWindow:Insert(_G[self:GetName().."EditBox"]:SetText(''));
-        end
-    end,
-    EditBoxOnEnterPressed = function(self)
-        mod:AddDestination(_G[self:GetName()]:GetText())
-        mod:RefreshEditTooltipGUI()
-        rulesAltered = true
-        self:GetParent():Hide()
-    end,
-    EditBoxOnEscapePressed = function(self)
-        self:GetParent():Hide()
-    end,
-    timeout = 0, exclusive = 1, whileDead = 1, hideOnEscape = 1,
-}
-
 StaticPopupDialogs['BULKMAIL_REMOVE_DESTINATION'] = {
     text = L["BulkMail - Confirm removal of destination"],
     button1 = L["Accept"], button2 = L["Cancel"],
     OnAccept = function(self)
         if self.data then
             mod:RemoveDestination(self.data)
-            mod:RefreshEditTooltipGUI()
             rulesAltered = true
+            mod:RefreshRulesEditor()
         end
     end,
     timeout = 0, exclusive = 1, hideOnEscape = 1,
