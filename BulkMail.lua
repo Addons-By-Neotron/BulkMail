@@ -1029,7 +1029,7 @@ function mod:MAIL_SHOW()
         self:RawHookScript(SendMailMailButton, 'OnClick', 'SendMailMailButton_OnClick')
         self:RawHookScript(MailFrameTab1, 'OnClick', 'MailFrameTab1_OnClick')
         self:RawHookScript(MailFrameTab2, 'OnClick', 'MailFrameTab2_OnClick')
-        self:RawHookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
+        self:HookScript(SendMailNameEditBox, 'OnTextChanged', 'SendMailNameEditBox_OnTextChanged')
         self:RawHookScript(SendMailNameEditBox, 'OnTabPressed', 'SendMailNameEditBox_OnTabPressed')
         self:RegisterEvent('MAIL_SEND_SUCCESS')
         self:RegisterEvent('SECURE_TRANSFER_CANCEL')
@@ -1255,16 +1255,19 @@ function mod:SendMailNameEditBox_OnTabPressed(frame, ...)
     self.hooks[frame].OnTabPressed(frame, ...)
 end
 
+-- Post-hook (HookScript), so Blizzard's own handler and its name
+-- autocomplete run untouched.
 function mod:SendMailNameEditBox_OnTextChanged(frame, a1)
-    sendDest = cacheLock and sendDest or SendMailNameEditBox:GetText()
-    sendCacheBuild(SendMailNameEditBox:GetText())
+    local text = SendMailNameEditBox:GetText()
+    sendDest = cacheLock and sendDest or text
+    sendCacheBuild(text)
     -- Sync recipient bar if it wasn't the source of the change
-    if not mod._updatingRecipient and mod._recipientBar and mod._recipientBar.editBox and mod._recipientBar.editBox:GetText() ~= SendMailNameEditBox:GetText() then
+    local bar = mod._recipientBar
+    if not mod._updatingRecipient and bar and bar.editBox and bar.editBox:GetText() ~= text then
         mod._updatingRecipient = true
-        mod._recipientBar.editBox:SetText(SendMailNameEditBox:GetText())
+        bar.editBox:SetText(text)
         mod._updatingRecipient = nil
     end
-    return self.hooks[frame].OnTextChanged(frame, a1)
 end
 
 --[[----------------------------------------------------------------------------
@@ -3546,7 +3549,13 @@ local function _createOrAttachRecipientBar(tooltip)
 
         editBox:SetScript("OnTextChanged", function(self, userInput)
             AutoCompleteEditBox_OnTextChanged(self, userInput)
-            if mod._updatingRecipient then return end
+            -- Only push changes made in this box (typing, or its own
+            -- autocomplete while focused) into the To: field. OnTextChanged for
+            -- a SetText fires after _updatingRecipient is already cleared, and
+            -- writing the text back would wipe Blizzard's autocomplete
+            -- highlight in the To: field.
+            if mod._updatingRecipient or not (userInput or self:HasFocus()) then return end
+            if SendMailNameEditBox:GetText() == self:GetText() then return end
             mod._updatingRecipient = true
             SendMailNameEditBox:SetText(self:GetText())
             mod._updatingRecipient = nil
