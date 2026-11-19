@@ -743,6 +743,7 @@ function mod:OnInitialize()
         profile = {
             ownCharactersOnly = true,
             confirmOtherRecipients = true,
+            blizzardSendsQueue = true,
             sizeMode = "free",
             freePosition = false,
             savedPos = nil,
@@ -870,11 +871,13 @@ function mod:OnInitialize()
                 set = function(args,v) self.db.char.isSink = v end,
                 order = 4000,
             },
+            toggleRow1 = { name = "", type = 'description', width = "full", order = 4050 },
             attachmulti = {
                 name = L["Attach multiple items"], type = 'toggle',
                 desc = L["Attach as many items as possible per mail."],
                 get = function() return self.db.char.attachMulti end,
                 set = function(args, v) self.db.char.attachMulti = v end,
+                width = 1.5,
                 order = 4100,
             },
             attachItemLevelMin = {
@@ -896,14 +899,25 @@ function mod:OnInitialize()
                 desc = L["Limit name suggestions in the mail To: field to your own characters and AutoSend destinations."],
                 get = function() return self.db.profile.ownCharactersOnly end,
                 set = function(_, v) mod:SetOwnCharactersOnly(v) end,
+                width = 1.5,
                 order = 4200,
             },
+            toggleRow2 = { name = "", type = 'description', width = "full", order = 4250 },
             confirmOtherRecipients = {
                 name = L["Confirm other players"], type = 'toggle',
                 desc = L["Ask before sending mail to a character that is not yours or an AutoSend destination."],
                 get = function() return self.db.profile.confirmOtherRecipients end,
                 set = function(_, v) self.db.profile.confirmOtherRecipients = v end,
+                width = 1.5,
                 order = 4300,
+            },
+            blizzardSendsQueue = {
+                name = L["Blizzard Send sends queue"], type = 'toggle',
+                desc = L["Clicking the Send button in the default mail window also sends the BulkMail queue. When off, only the BulkMail Send button sends the queue."],
+                get = function() return self.db.profile.blizzardSendsQueue end,
+                set = function(_, v) self.db.profile.blizzardSendsQueue = v end,
+                width = 1.5,
+                order = 4400,
             },
             sizeMode = {
                 name = L["Window Size"],
@@ -1205,7 +1219,9 @@ function mod:SendMailMailButton_OnClick(frame, a1)
     end
     sendDest = SendMailNameEditBox:GetText()
     self._sendCOD = SendMailCODButton:GetChecked() and MoneyInputFrame_GetCopper(SendMailMoney)
-    if GetSendMailItem(1) or sendCache and next(sendCache) then
+    -- frame is SendMailMailButton only when the Blizzard Send button was clicked
+    local bulk = frame ~= SendMailMailButton or self.db.profile.blizzardSendsQueue
+    if bulk and (GetSendMailItem(1) or sendCache and next(sendCache)) then
         organizeSendCache()
         self._sendingBulk = true
         self:Send(self._sendCOD)
